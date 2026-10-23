@@ -12,10 +12,20 @@ import type { GameViewDto, ZoneDto, ZoneKind } from "@/protocol/game";
 import { isPromptLoggingEnabled } from "@/lib/debugPrompts";
 import { GAME_CARD_DEFAULTS, hiddenZoneCard } from "@/lib/gameCard";
 import { hasVisualDisplayPresentation, presentDisplayEvent } from "@/lib/displayEvents";
+import { normalizeCardCosmetics } from "@/lib/cardCosmetics";
 
 function visibleCardsOf(zone: ZoneDto): ClientCardDto[] {
   return zone.cards.flatMap((card) =>
-    card.visibility === "visible" ? [{ ...GAME_CARD_DEFAULTS, ...card, zoneId: zone.zone }] : [],
+    card.visibility === "visible"
+      ? [
+          {
+            ...GAME_CARD_DEFAULTS,
+            ...card,
+            cosmetics: card.isFaceDown ? undefined : normalizeCardCosmetics(card.cosmetics),
+            zoneId: zone.zone,
+          },
+        ]
+      : [],
   );
 }
 
@@ -41,7 +51,12 @@ function normalizeGameView(
     if (!zone) return [];
     return zone.cards.map((card) =>
       card.visibility === "visible"
-        ? { ...GAME_CARD_DEFAULTS, ...card, zoneId: zone.zone }
+        ? {
+            ...GAME_CARD_DEFAULTS,
+            ...card,
+            cosmetics: card.isFaceDown ? undefined : normalizeCardCosmetics(card.cosmetics),
+            zoneId: zone.zone,
+          }
         : hiddenZoneCard(card.id, ownerId, zone.zone),
     );
   };
@@ -181,5 +196,40 @@ export function applyPrompt(
     console.log(`[prompt:${source}] ${prompt.input.type}`, JSON.stringify(prompt, null, 2));
   }
   notePromptArrived(prompt.input.type);
-  route({ displayEvents: [], gameView: null, prompt }, `${source}: ${prompt.input.type}`, set, get);
+  const normalized = prompt.sourceCard
+    ? { ...prompt, sourceCard: { ...GAME_CARD_DEFAULTS, ...prompt.sourceCard } }
+    : { ...prompt };
+  const input = normalized.input;
+  switch (input.type) {
+    case "mulliganPutBack":
+    case "revealCards":
+    case "scry":
+    case "chooseCards":
+      normalized.input = {
+        ...input,
+        cards: input.cards.map((card) => ({ ...GAME_CARD_DEFAULTS, ...card })),
+      };
+      break;
+    case "chooseDamageAssignmentOrder":
+      normalized.input = {
+        ...input,
+        blockerCards: input.blockerCards.map((card) => ({ ...GAME_CARD_DEFAULTS, ...card })),
+      };
+      break;
+    case "reorder":
+      normalized.input = {
+        ...input,
+        items: input.items.map((item) => ({
+          ...item,
+          card: { ...GAME_CARD_DEFAULTS, ...item.card },
+        })),
+      };
+      break;
+  }
+  route(
+    { displayEvents: [], gameView: null, prompt: normalized },
+    `${source}: ${prompt.input.type}`,
+    set,
+    get,
+  );
 }

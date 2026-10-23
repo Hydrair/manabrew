@@ -43,8 +43,7 @@ function Choice<T extends string | boolean>({
           <Button
             key={String(option.value)}
             size="sm"
-            variant="outline"
-            className="aria-pressed:border-accent"
+            variant={value === option.value ? "selected" : "outline"}
             aria-pressed={value === option.value}
             onClick={() => onChange(option.value)}
           >
@@ -115,7 +114,7 @@ export function GameSettingsModal({ onClose }: { onClose: () => void }) {
             value={prefs.promptCardStyle}
             options={INLINE_CARD_STYLE_OPTIONS}
             onChange={prefs.setPromptCardStyle}
-            hint="Realistic uses printed art. Rules shows card rules and current game information. Individual cards can still be switched."
+            hint="Generated cards use Card Glint frames with current game information. Original shows the printed scan. Individual cards can still be switched."
           />
           <Choice
             label="Board hover preview view"

@@ -17,9 +17,17 @@ export type ZonePanelItem = "library" | "graveyard" | "exile";
 export type CardPreviewMode = "hover" | "right-click";
 export type BattlefieldCardStyle = "realistic" | "art" | "frame";
 export type InGameCardPreviewStyle = "printed" | "rules";
+export type InGameCardPreviewSize = "small" | "medium" | "large";
 export type InlineCardStyle = "printed" | "rules";
 export type OpponentHandFanMode = "always" | "revealed" | "never";
-export type RulesPreviewSectionId = "actions" | "rules" | "progression" | "details" | "flavor";
+
+const CARD_VIEW_DEFAULTS = {
+  battlefieldCardStyle: "realistic",
+  inGameCardPreviewStyle: "printed",
+  handCardStyle: "printed",
+  stackCardStyle: "rules",
+  promptCardStyle: "printed",
+} as const;
 
 export interface LastRoomSetup {
   kind: "match" | "limited";
@@ -40,8 +48,6 @@ export const SOUND_VOLUME_STEP = 0.05;
 const DEFAULT_SOUND_VOLUME = 1;
 
 export interface PreferencesState {
-  appThemePreset: string;
-  setAppThemePreset: (id: string) => void;
   personalThemeName: string | null;
   appLanguage: AppLanguagePreference;
   setAppLanguage: (language: AppLanguagePreference) => void;
@@ -145,14 +151,14 @@ export interface PreferencesState {
   setCardHoverDelayMs: (ms: number) => void;
   inGameCardPreviewStyle: InGameCardPreviewStyle;
   setInGameCardPreviewStyle: (style: InGameCardPreviewStyle) => void;
+  inGameCardPreviewSize: InGameCardPreviewSize;
+  setInGameCardPreviewSize: (size: InGameCardPreviewSize) => void;
   handCardStyle: InlineCardStyle;
   setHandCardStyle: (style: InlineCardStyle) => void;
   stackCardStyle: InlineCardStyle;
   setStackCardStyle: (style: InlineCardStyle) => void;
   promptCardStyle: InlineCardStyle;
   setPromptCardStyle: (style: InlineCardStyle) => void;
-  collapsedRulesPreviewSections: RulesPreviewSectionId[];
-  setRulesPreviewSectionCollapsed: (section: RulesPreviewSectionId, collapsed: boolean) => void;
 
   appThemeColorOverrides: Record<ThemeMode, Partial<ThemeColors>>;
   setAppThemeColorOverride: (mode: ThemeMode, key: keyof ThemeColors, color: string) => void;
@@ -183,7 +189,6 @@ export interface PreferencesState {
 }
 
 const PERSISTED_PREFERENCE_KEYS = [
-  "appThemePreset",
   "personalThemeName",
   "appLanguage",
   "flashDurationMs",
@@ -218,10 +223,10 @@ const PERSISTED_PREFERENCE_KEYS = [
   "cardPreviewMode",
   "cardHoverDelayMs",
   "inGameCardPreviewStyle",
+  "inGameCardPreviewSize",
   "handCardStyle",
   "stackCardStyle",
   "promptCardStyle",
-  "collapsedRulesPreviewSections",
   "appThemeColorOverrides",
   "gameThemeColorOverrides",
   "lastPlayedDeckId",
@@ -298,14 +303,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       (set) => {
         const serverDefaults = getServerConnectionDefaults();
         return {
-          appThemePreset: "default",
-          setAppThemePreset: (appThemePreset) =>
-            set({
-              appThemePreset,
-              personalThemeName: null,
-              appThemeColorOverrides: { light: {}, dark: {} },
-              gameThemeColorOverrides: {},
-            }),
+          ...CARD_VIEW_DEFAULTS,
           personalThemeName: null,
           appLanguage: "system",
           setAppLanguage: (appLanguage) => set({ appLanguage }),
@@ -373,7 +371,6 @@ export const usePreferencesStore = create<PreferencesState>()(
           lockZoneTiles: false,
           setLockZoneTiles: (lockZoneTiles) => set({ lockZoneTiles }),
 
-          battlefieldCardStyle: "art",
           setBattlefieldCardStyle: (battlefieldCardStyle) => set({ battlefieldCardStyle }),
 
           boardBackgroundId: DEFAULT_BOARD_BACKGROUND_ID,
@@ -396,7 +393,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           directTransport: false,
           setDirectTransport: (directTransport) => set({ directTransport }),
 
-          aiController: "manabot",
+          aiController: "forge",
           setAiController: (aiController) => set({ aiController }),
 
           hideAccountSaveNudge: false,
@@ -419,23 +416,12 @@ export const usePreferencesStore = create<PreferencesState>()(
 
           cardHoverDelayMs: 350,
           setCardHoverDelayMs: (ms) => set({ cardHoverDelayMs: ms }),
-          inGameCardPreviewStyle: "printed",
           setInGameCardPreviewStyle: (inGameCardPreviewStyle) => set({ inGameCardPreviewStyle }),
-          handCardStyle: "printed",
+          inGameCardPreviewSize: "medium",
+          setInGameCardPreviewSize: (inGameCardPreviewSize) => set({ inGameCardPreviewSize }),
           setHandCardStyle: (handCardStyle) => set({ handCardStyle }),
-          stackCardStyle: "printed",
           setStackCardStyle: (stackCardStyle) => set({ stackCardStyle }),
-          promptCardStyle: "printed",
           setPromptCardStyle: (promptCardStyle) => set({ promptCardStyle }),
-          collapsedRulesPreviewSections: [],
-          setRulesPreviewSectionCollapsed: (section, collapsed) =>
-            set((state) => ({
-              collapsedRulesPreviewSections: collapsed
-                ? state.collapsedRulesPreviewSections.includes(section)
-                  ? state.collapsedRulesPreviewSections
-                  : [...state.collapsedRulesPreviewSections, section]
-                : state.collapsedRulesPreviewSections.filter((id) => id !== section),
-            })),
 
           appThemeColorOverrides: { light: {}, dark: {} },
           setAppThemeColorOverride: (mode, key, color) =>
@@ -484,14 +470,13 @@ export const usePreferencesStore = create<PreferencesState>()(
       },
       {
         name: STORAGE_KEYS.PREFERENCES,
-        version: 2,
+        version: 6,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== "object") return {};
-          const persisted = persistedState as Record<string, unknown>;
-          if (version < 2 && persisted.battlefieldCardStyle === "realistic") {
-            persisted.battlefieldCardStyle = "art";
-          }
-          return persisted;
+          let persisted = persistedState as Record<string, unknown>;
+          if (version < 4) persisted = { ...persisted, ...CARD_VIEW_DEFAULTS };
+          if (version < 6) persisted = { ...persisted, aiController: "forge" };
+          return pickPersistedPreferences(persisted);
         },
         merge: (persistedState, currentState) => ({
           ...currentState,

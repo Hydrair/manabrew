@@ -16,6 +16,7 @@ import {
   STACK_OFFSET_Y,
 } from "./stackLayout";
 import type { StackAnchorProvider, StackCallbacks, StackSpec } from "./stack.types";
+import { gameCardFaceIndex } from "@/lib/gameCard";
 
 const MAX_CARD_HEIGHT_FRAC = 0.55;
 const COMPACT_MAX_CARD_HEIGHT_FRAC = 0.69;
@@ -42,6 +43,7 @@ export class StackLayer implements StackAnchorProvider {
   private faceOverrides = new Map<string, boolean>();
   private rulesViewOverrides = new Map<string, boolean>();
   private rulesViewDefault = false;
+  private updatingSpec = false;
   private spec: StackSpec = {
     cards: [],
     flash: null,
@@ -144,6 +146,7 @@ export class StackLayer implements StackAnchorProvider {
     this.rulesViewDefault = active;
     this.rulesViewOverrides.clear();
     for (const sprite of this.sprites.values()) sprite.setRulesView(active);
+    this.flashSprite?.setHandRulesView(active);
   }
 
   setViewport(width: number, height: number): void {
@@ -170,6 +173,7 @@ export class StackLayer implements StackAnchorProvider {
   }
 
   setSpec(spec: StackSpec): void {
+    this.updatingSpec = true;
     const previousCardWidth = this.cardWidth();
     this.spec = spec;
     if (this.sprites.size > 0 && this.cardWidth() !== this.builtCardWidth) {
@@ -211,22 +215,14 @@ export class StackLayer implements StackAnchorProvider {
           if (staleRulesViewOverride !== undefined) {
             this.rulesViewOverrides.set(card.id, staleRulesViewOverride);
           }
-          const displayCard =
-            staleOverride === undefined
-              ? card
-              : { ...card, card: { ...card.card, isTransformed: staleOverride } };
-          reused.setSpec(displayCard);
+          reused.setSpec(card, staleOverride === undefined ? undefined : staleOverride ? 1 : 0);
           continue;
         }
         const transformed = this.faceOverrides.get(card.id);
-        const displayCard =
-          transformed === undefined
-            ? card
-            : { ...card, card: { ...card.card, isTransformed: transformed } };
         this.builtCardWidth = this.cardWidth();
         sprite = new StackCardSprite(
           this.theme,
-          displayCard,
+          card,
           this.builtCardWidth,
           this.rulesViewOverrides.get(card.id) ?? this.rulesViewDefault,
           this.callbacks.onRenderRequested,
@@ -235,16 +231,18 @@ export class StackLayer implements StackAnchorProvider {
           (id) => this.toggleRulesView(id),
           (id) => this.toggleFace(id),
           (card, bounds) => this.callbacks.onLongPressCard?.(card, bounds),
+          transformed === undefined ? undefined : transformed ? 1 : 0,
+          () => {
+            if (this.updatingSpec) return;
+            this.layout();
+            this.callbacks.onRenderRequested?.();
+          },
         );
         this.container.addChild(sprite.container);
         this.sprites.set(card.id, sprite);
       } else {
         const transformed = this.faceOverrides.get(card.id);
-        const displayCard =
-          transformed === undefined
-            ? card
-            : { ...card, card: { ...card.card, isTransformed: transformed } };
-        sprite.setSpec(displayCard);
+        sprite.setSpec(card, transformed === undefined ? undefined : transformed ? 1 : 0);
       }
     }
     for (const [id, sprite] of [...this.sprites]) {
@@ -282,6 +280,7 @@ export class StackLayer implements StackAnchorProvider {
 
     this.syncFlash();
     this.setPromptReference(this.promptReferenceId, this.promptReferenceColor);
+    this.updatingSpec = false;
     this.layout();
   }
 
@@ -298,7 +297,7 @@ export class StackLayer implements StackAnchorProvider {
     }
     this.retiringSprites.clear();
     this.sprites.clear();
-    this.flashSprite?.destroy();
+    this.flashSprite?.destroy({ children: true });
     this.container.destroy({ children: true });
   }
 
@@ -359,7 +358,7 @@ export class StackLayer implements StackAnchorProvider {
   }
 
   scrollRulesAt(x: number, y: number, delta: number, mode: number): boolean {
-    return this.rulesSpriteAt(x, y)?.scrollRules(delta, mode) ?? false;
+    return this.rulesSpriteAt(x, y)?.scrollRules(delta, mode, x, y) ?? false;
   }
 
   private rulesSpriteAt(x: number, y: number): StackCardSprite | null {
@@ -415,17 +414,15 @@ export class StackLayer implements StackAnchorProvider {
     const card = this.spec.cards.find((candidate) => candidate.id === stackObjectId);
     if (!card?.card.isDoubleFaced) return;
     if (this.hoveredId === stackObjectId) this.setHovered(null);
-    const current = this.faceOverrides.get(stackObjectId) ?? card.card.isTransformed;
+    const current = this.faceOverrides.get(stackObjectId) ?? gameCardFaceIndex(card.card) === 1;
     this.faceOverrides.set(stackObjectId, !current);
-    this.sprites.get(stackObjectId)?.destroy();
-    this.sprites.delete(stackObjectId);
     this.setSpec(this.spec);
   }
 
   toggleRulesView(stackObjectId: string): void {
     const sprite = this.sprites.get(stackObjectId);
     if (!sprite) return;
-    const active = !sprite.usesRulesView;
+    const active = !(this.rulesViewOverrides.get(stackObjectId) ?? sprite.usesRulesView);
     this.rulesViewOverrides.set(stackObjectId, active);
     sprite.setRulesView(active);
   }
@@ -666,16 +663,17 @@ export class StackLayer implements StackAnchorProvider {
     const flash = this.spec.flash;
     const landed = flash ? this.spec.cards.some((c) => c.sourceId === flash.card.id) : false;
     if (!flash || landed || !this.spec.showPreStackFlash) {
-      this.flashSprite?.destroy();
+      this.flashSprite?.destroy({ children: true });
       this.flashSprite = null;
       this.flashToken = null;
       return;
     }
     if (this.flashToken === flash.token) return;
-    this.flashSprite?.destroy();
+    this.flashSprite?.destroy({ children: true });
     this.flashToken = flash.token;
     const sprite = new CardSprite(flash.card, "hand");
     sprite.onVisualChange = this.callbacks.onRenderRequested;
+    sprite.setHandRulesView(this.rulesViewDefault);
     const scale = this.faceScale();
     sprite.scale.set(scale);
     sprite.zIndex = 300;

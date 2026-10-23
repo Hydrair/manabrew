@@ -28,6 +28,9 @@ import { Check, Loader2, Search, Shuffle, Swords, User, Bot, X } from "lucide-re
 import { resolveCoverCard } from "@/components/deck/deckCover.utils";
 import { useHubDeckSearch } from "@/hooks/useHubDeckSearch";
 import { useHubStore } from "@/stores/useHubStore";
+import { warmDeckFaces } from "@/lib/cardFaceWarmup";
+import { useCardPoolStore } from "@/stores/useCardPoolStore";
+import { useCardPool } from "@/hooks/useCardPool";
 import type { DeckHubEntrySummary } from "@/api/hubTypes";
 interface SelectedDeck {
   id: string;
@@ -75,6 +78,7 @@ export function DeckVsSelector({
     validateDeckSections(
       { deck: preSelectedSavedDeck.deck, commanderName: preSelectedCommanderName },
       preSelectedFormat,
+      useCardPoolStore.getState(),
     ).legal
       ? {
           id: `local:${preSelectedSavedDeck.id}`,
@@ -99,6 +103,11 @@ export function DeckVsSelector({
   const [pickingSide, setPickingSide] = useState<PickingSide>(
     preSelectedDeckEntry ? "opponent" : "player",
   );
+  useEffect(() => {
+    const own = playerDeck?.sourceDeck;
+    const opponent = opponentDeck?.sourceDeck;
+    if (own || opponent) void warmDeckFaces(own ? [own] : [], opponent ? [opponent] : []);
+  }, [playerDeck, opponentDeck]);
   const [selectedFormat, setSelectedFormat] = useState<PlayFormatId | null>(
     preSelectedDeckEntry?.formatId ?? rememberedFormatId,
   );
@@ -211,6 +220,21 @@ export function DeckVsSelector({
       commanderName: deck.commanders?.[0]?.identity.name,
     };
   });
+  const formatFilteredUserDecks = userDeckEntries.filter(
+    (deck) => selectedFormat === null || deck.formatId === selectedFormat,
+  );
+  const cardPool = useCardPool(
+    [...formatFilteredUserDecks, playerDeck, opponentDeck].flatMap((entry) =>
+      entry
+        ? [
+            {
+              input: { deck: entry.sourceDeck, commanderName: entry.commanderName },
+              format: getFormat(entry.formatId ?? "standard"),
+            },
+          ]
+        : [],
+    ),
+  );
   const deckValidations = useMemo(() => {
     const map = new Map<
       string,
@@ -227,15 +251,13 @@ export function DeckVsSelector({
         validateDeckSections(
           { deck: entry.sourceDeck, commanderName: entry.commanderName },
           format,
+          cardPool,
         ),
       );
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedDecks, currentDeck]);
-  const formatFilteredUserDecks = userDeckEntries.filter(
-    (deck) => selectedFormat === null || deck.formatId === selectedFormat,
-  );
+  }, [savedDecks, currentDeck, cardPool]);
   const filteredUserDecks = searchLower
     ? formatFilteredUserDecks.filter((deck) => deck.name.toLowerCase().includes(searchLower))
     : formatFilteredUserDecks;
@@ -378,7 +400,7 @@ export function DeckVsSelector({
 
   function handleTableChosen() {
     setTableDialogOpen(false);
-    if (playerDeck?.formatId === "commander") {
+    if (playerDeck?.formatId === "commander" || playerDeck?.formatId === "paupercommander") {
       setPlayersDialogOpen(true);
       return;
     }
@@ -400,6 +422,7 @@ export function DeckVsSelector({
       const validation = validateDeckSections(
         { deck: selected.sourceDeck, commanderName: selected.commanderName },
         format,
+        cardPool,
       );
       if (!validation.legal) {
         toast.warning(validation.errors[0] ?? `"${selected.name}" is not legal`);
@@ -458,6 +481,7 @@ export function DeckVsSelector({
       validateDeckSections(
         { deck: selected.sourceDeck, commanderName: selected.commanderName },
         format,
+        cardPool,
       ).legal
     );
   };
@@ -680,6 +704,7 @@ export function DeckVsSelector({
                         ? validateDeckSections(
                             { deck: selected.sourceDeck, commanderName: selected.commanderName },
                             format,
+                            cardPool,
                           )
                         : { legal: true, errors: [] as string[] };
                     return (
@@ -855,7 +880,7 @@ export function DeckVsSelector({
         onCancel={() => setTableDialogOpen(false)}
         centerContent={
           selectedFormat ? (
-            <span className="font-serif text-lg font-light text-foreground/90">
+            <span className="font-serif text-lg font-semibold text-foreground/90">
               {getFormat(selectedFormat)?.name ?? selectedFormat}
             </span>
           ) : undefined

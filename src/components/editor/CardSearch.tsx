@@ -21,16 +21,19 @@ import type { DeckCard } from "@/protocol/deck";
 import { useDraggable } from "@dnd-kit/core";
 import { toast } from "sonner";
 import { useDeckStore } from "@/stores/useDeckStore";
+import { useScryfallStore } from "@/stores/useScryfallStore";
 import { CardDetailModal } from "@/components/editor/CardDetailModal";
 import { CardThumbnail } from "@/components/editor/deckEditor.primitives";
 import { CARD_WIDTH_MAP, DEFAULT_CARD_SIZE } from "@/components/editor/deckBuilder.utils";
 import { SetStudyToolbar } from "@/components/editor/SetStudyToolbar";
 import { SetSelect } from "@/components/editor/SetSelect";
-import { deckCardToPreviewDto, scryfallToDeckCard } from "@/lib/scryfall.utils";
+import { deckCardToPreviewDto, scryfallToSearchResult } from "@/lib/scryfall.utils";
+import { shouldLocalizeScryfallSearchResults } from "@/lib/scryfallSearch";
 import { manaSymbolUrl } from "@/api/scryfall";
 import { ScryfallImg } from "@/components/ScryfallImg";
+import { GeneratedCardImage } from "@/components/game/GeneratedCardImage";
 import { HoverCardPreview } from "@/components/game/HoverCardPreview";
-import { useCardPreview } from "@/hooks/useCardPreview";
+import { useCardPreview, type CardPreviewController } from "@/hooks/useCardPreview";
 import type { ManaCode } from "@/types/scryfall";
 const COLOR_FILTERS = [
   {
@@ -169,6 +172,10 @@ const FORMAT_FILTERS = [
   {
     id: "pauper",
     label: `Pauper`,
+  },
+  {
+    id: "paupercommander",
+    label: `Pauper Commander`,
   },
   {
     id: "premodern",
@@ -621,7 +628,7 @@ function FilterBtn({
       className={cn(
         "h-6 min-w-[1.5rem] select-none rounded border px-1.5 text-xs font-semibold transition-colors pointer-coarse:h-11 pointer-coarse:min-w-11",
         active
-          ? "bg-selection text-selection-foreground border-selection"
+          ? "bg-selection text-selection-foreground border-selection-border"
           : "bg-background text-muted-foreground border-border hover:bg-muted",
         className,
       )}
@@ -649,7 +656,7 @@ function ManaFilterBtn({
       className={cn(
         "h-7 w-7 rounded-full border-2 transition-all select-none flex items-center justify-center p-0.5 pointer-coarse:h-9 pointer-coarse:w-9",
         active
-          ? "border-selection ring-2 ring-selection/30 scale-110"
+          ? "border-selection-border ring-2 ring-selection-border/30 scale-110"
           : "border-transparent opacity-70 hover:opacity-100 hover:scale-105",
       )}
     >
@@ -677,6 +684,7 @@ function FilterSeparator({ label }: { label: string }) {
 }
 function DraggableCardGrid({
   card,
+  displayName,
   onMoreInfo,
   onAdd,
   standalone,
@@ -684,6 +692,7 @@ function DraggableCardGrid({
   onLeave,
 }: {
   card: DeckCard;
+  displayName: string;
   onMoreInfo: () => void;
   onAdd?: () => void;
   standalone?: boolean;
@@ -701,7 +710,7 @@ function DraggableCardGrid({
       <button
         type="button"
         onClick={onMoreInfo}
-        title={`Inspect ${card.identity.name}`}
+        title={`Inspect ${displayName}`}
         className="block aspect-[5/7] w-full cursor-zoom-in rounded-lg text-left motion-safe:transition-transform motion-safe:hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <CardThumbnail card={card} loading="lazy" />
@@ -755,6 +764,7 @@ function DraggableCardGrid({
 }
 function DraggableCardRow({
   card,
+  displayName,
   onMoreInfo,
   onAdd,
   standalone,
@@ -762,6 +772,7 @@ function DraggableCardRow({
   onLeave,
 }: {
   card: DeckCard;
+  displayName: string;
   onMoreInfo: () => void;
   onAdd?: () => void;
   standalone?: boolean;
@@ -789,16 +800,11 @@ function DraggableCardRow({
       )}
     >
       <div className="w-8 h-8 shrink-0 rounded overflow-hidden bg-muted">
-        <ScryfallImg
-          src={card.uris.small}
-          alt=""
-          className="w-full h-full object-cover object-top"
-          draggable={false}
-        />
+        <GeneratedCardImage deckCard={card} className="h-full w-full" />
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate leading-tight">{card.identity.name}</div>
+        <div className="text-sm font-medium truncate leading-tight">{displayName}</div>
         <div className="text-xs text-muted-foreground truncate leading-tight">{typeStr}</div>
       </div>
 
@@ -838,7 +844,7 @@ interface CardSearchProps {
   initialSet?: string;
   onSetChange?: (code: string) => void;
   onClose?: () => void;
-  previewController?: ReturnType<typeof useCardPreview>;
+  previewController?: CardPreviewController;
   /** Shared rail slot — when provided, the hover preview portals into it
    *  (pinned). When absent, the search panel renders no preview of its own. */
   previewSlot?: HTMLElement | null;
@@ -857,8 +863,9 @@ export function CardSearch({
   const internalPreview = useCardPreview();
   const preview = previewController ?? internalPreview;
   const addToMain = useDeckStore((s) => s.addToMain);
+  const locale = useScryfallStore((s) => s.locale);
   const addCard = (card: DeckCard) => {
-    addToMain({ ...card, identity: { ...card.identity, id: crypto.randomUUID() } });
+    addToMain(card);
     toast.success(`Added ${card.identity.name}`);
   };
   const [text, setText] = useState("");
@@ -950,7 +957,11 @@ export function CardSearch({
   }
   // Keep both DeckCard and raw ScryfallCard arrays in sync
   const rawCards: ScryfallCard[] = data?.pages.flatMap((p) => p.data) ?? [];
-  const allCards: DeckCard[] = rawCards.map(scryfallToDeckCard);
+  const preserveSearchLanguage = !shouldLocalizeScryfallSearchResults(effectiveQuery);
+  const searchResults = rawCards.map((card) =>
+    scryfallToSearchResult(card, locale, preserveSearchLanguage),
+  );
+  const allCards: DeckCard[] = searchResults.map((result) => result.card);
   const detailIndex = detailCard ? rawCards.findIndex((card) => card.id === detailCard.id) : -1;
   useEffect(() => {
     if (
@@ -1452,6 +1463,7 @@ export function CardSearch({
                 >
                   <DraggableCardGrid
                     card={card}
+                    displayName={searchResults[i].displayName}
                     onMoreInfo={() => setDetailCard(rawCards[i])}
                     onAdd={standalone ? undefined : () => addCard(card)}
                     standalone={standalone}
@@ -1469,6 +1481,7 @@ export function CardSearch({
                 <DraggableCardRow
                   key={card.identity.id}
                   card={card}
+                  displayName={searchResults[i].displayName}
                   onMoreInfo={() => setDetailCard(rawCards[i])}
                   onAdd={standalone ? undefined : () => addCard(card)}
                   standalone={standalone}

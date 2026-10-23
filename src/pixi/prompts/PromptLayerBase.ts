@@ -1,3 +1,4 @@
+import { UI_FONT_FAMILY as FONT } from "@/themes/typography";
 import {
   Application,
   Container,
@@ -42,6 +43,7 @@ import {
   setVirtualTextInputActive,
 } from "@/lib/keybindings";
 import type { CardDto } from "@/protocol";
+import { gameCardFaceIndex } from "@/lib/gameCard";
 import { PromptButton, type PromptButtonOptions } from "./PromptButton";
 import { PromptGlow } from "./PromptGlow";
 import { LongPressGesture } from "@/pixi/LongPressGesture";
@@ -73,7 +75,6 @@ export const MODAL_TYPES = new Set([
   "reorder",
   "diceRolled",
 ]);
-const FONT = "Inter, system-ui, sans-serif";
 export const PANEL_PADDING = 8;
 export const ROW_GAP = 10;
 const CARD_HOVER_Z_INDEX = 600;
@@ -582,7 +583,7 @@ export abstract class PromptLayerBase {
   protected promptCardPointerId: number | null = null;
   protected selectionFilter = "";
   protected selectionFilterFocused = false;
-  protected mobileCardSearchInput: HTMLInputElement | null = null;
+  protected choiceSearchInput: HTMLInputElement | null = null;
   protected selectionFilterBlinkAt = 0;
   protected selectionFilterView: {
     container: Container;
@@ -777,6 +778,7 @@ export abstract class PromptLayerBase {
       usableWidth: this.layoutWidth - safe.left - safe.right,
       usableHeight: this.viewportHeight - safe.top - safe.bottom,
       horizontal: naturalSize.width > naturalSize.height,
+      size: usePreferencesStore.getState().inGameCardPreviewSize,
     });
   }
 
@@ -797,7 +799,7 @@ export abstract class PromptLayerBase {
     if (!state) {
       state = {
         rulesView: usePreferencesStore.getState().promptCardStyle === "rules",
-        face: card.isTransformed ? 1 : 0,
+        face: gameCardFaceIndex(card),
         horizontalFlipped: true,
       };
       this.promptCardStates.set(card.id, state);
@@ -809,7 +811,7 @@ export abstract class PromptLayerBase {
     sprite.onVisualChange = this.callbacks.onRenderRequested;
     const state = this.promptCardState(card);
     sprite.setPreviewFace(state.face);
-    sprite.setHandRulesView(state.rulesView);
+    sprite.setHandRulesView(state.rulesView, true);
     const horizontal = sprite.horizontalFrame && !card.isDoubleFaced;
     sprite.setHandControls({
       rulesView: state.rulesView,
@@ -830,10 +832,13 @@ export abstract class PromptLayerBase {
 
   protected togglePromptCardFace(card: CardDto, sprite: CardSprite): void {
     const state = this.promptCardState(card);
-    if (card.isDoubleFaced) state.face = state.face === 0 ? 1 : 0;
-    else if (sprite.horizontalFrame) state.horizontalFlipped = !state.horizontalFlipped;
-    else return;
-    this.rebuild();
+    if (card.isDoubleFaced) {
+      state.face = state.face === 0 ? 1 : 0;
+      this.configurePromptCardSprite(sprite, card);
+    } else if (sprite.horizontalFrame) {
+      state.horizontalFlipped = !state.horizontalFlipped;
+      sprite.flipPreviewOrientation(() => this.configurePromptCardSprite(sprite, card));
+    }
   }
   protected bindPromptCardLongPress(
     target: Container,
@@ -975,7 +980,7 @@ export abstract class PromptLayerBase {
   }
 
   scrollRulesAt(x: number, y: number, delta: number, mode: number): boolean {
-    return this.rulesSpriteAt(x, y)?.scrollHandRules(delta, mode) ?? false;
+    return this.rulesSpriteAt(x, y)?.scrollHandRules(delta, mode, x, y) ?? false;
   }
 
   private rulesSpriteAt(x: number, y: number): CardSprite | null {
@@ -983,6 +988,7 @@ export abstract class PromptLayerBase {
     let target: Container | null = this.app.renderer.events.rootBoundary.hitTest(x, y);
     let sprite: CardSprite | null = null;
     while (target && target !== this.container) {
+      if (target === this.modalBody?.body) return null;
       if (target instanceof CardSprite && target.usesHandRulesView) sprite = target;
       target = target.parent;
     }
@@ -1330,13 +1336,12 @@ export abstract class PromptLayerBase {
 
   protected setSelectionFilterFocused(focused: boolean): void {
     this.selectionFilterFocused = focused;
+    if (!focused && this.choiceSearchInput && document.activeElement === this.choiceSearchInput)
+      this.choiceSearchInput.blur();
     if (
-      !focused &&
-      this.mobileCardSearchInput &&
-      document.activeElement === this.mobileCardSearchInput
-    )
-      this.mobileCardSearchInput.blur();
-    if (this.spec?.currentPrompt?.input.type === "chooseCards") {
+      this.spec?.currentPrompt?.input.type === "chooseCards" ||
+      this.spec?.currentPrompt?.input.type === "chooseFromSelection"
+    ) {
       setVirtualTextInputActive(this, focused);
     }
     this.selectionFilterBlinkAt = performance.now();
