@@ -7,6 +7,7 @@ import { gameCardFaceIndex, GAME_CARD_DEFAULTS } from "@/lib/gameCard";
 import { partitionBoardTargets } from "@/lib/boardTargets";
 import { useGameUIStore } from "@/stores/useGameUIStore";
 import { useKeybindings } from "@/hooks/useKeybindings";
+import { playAppSound } from "@/lib/soundRuntime";
 import { usePreferencesStore } from "@/stores/usePreferencesStore";
 import { usePromptPreferencesStore } from "@/stores/usePromptPreferencesStore";
 import { useAutoResolvePrompt } from "@/components/prompts/internal/useAutoResolvePrompt";
@@ -1150,16 +1151,24 @@ export default function Game({ exitTo }: GameProps = {}) {
     },
     "toggle-dev-panel": () => useGameUIStore.getState().toggleDevPanel(),
     "pass-priority": () => {
-      if (manualApi || document.querySelector('[role="dialog"]')) return false;
-      if (confirmPromptRef.current()) return true;
-      if (promptType !== "chooseAction") return false;
+      if (manualApi || isWaitingForResponse || document.querySelector('[role="dialog"]'))
+        return false;
+      if (confirmPromptRef.current()) {
+        playAppSound("buttonClick");
+        return true;
+      }
+      if (promptType !== "chooseAction" || !gameView) return false;
       unifiedPassRef.current();
+      playAppSound("buttonClick");
       return true;
     },
     "pass-end-of-turn": () => {
-      if (manualApi) return;
-      if (document.querySelector('[role="dialog"]')) return;
-      if (promptType === "chooseAction") passEndTurnRef.current();
+      if (manualApi || isWaitingForResponse || document.querySelector('[role="dialog"]'))
+        return false;
+      if (promptType !== "chooseAction" || !gameView) return false;
+      passEndTurnRef.current();
+      playAppSound("buttonClick");
+      return true;
     },
     "toggle-priority-mode": () => {
       if (manualApi) return;
