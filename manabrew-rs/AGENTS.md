@@ -39,6 +39,8 @@ All under `manabrew-rs/crates/`. The relay, hub, and self-hosted node each have 
 
 Dependency direction: `foundation`, `card-script`, `cardset-archive` ← `carddb` ← `engine` ← everything else, and `manabrew-protocol` ← `manabrew-relay-protocol`. Don't introduce cycles.
 
+Keep `display::DisplayEvent` available to protocol implementers even while the reference runtime does not emit it. The TypeScript generator must export it explicitly because no active transport type references it.
+
 Per-copy `CardCosmetics` and its closed wire types live in `forge-foundation/src/sealed_product/card_cosmetics.rs`; `manabrew-protocol` re-exports them. Printing selections use version 1, at most two inherited face layers, bounded text and finite numeric values. `Arc<CardPrintingSelection>` shares immutable appearance data across runtime snapshots; clone the handle rather than its payload. Preserve explicit per-face default values and existing PaperCard Eq/Hash grouping. Runtime deck loading binds exact physical entries before shuffle, while created copies start without inherited cosmetics. Token overrides use original owner plus exact token script, never name matching.
 
 `CardCosmetics.wearAmount` is a finite scalar in `[0, 1]` and takes precedence over legacy wear presets. Explicit zero clears both wear and its seed; positive amounts retain a nonzero seed. Keep Rust, Java codec and frontend normalization aligned.

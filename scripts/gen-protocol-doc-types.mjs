@@ -206,6 +206,7 @@ for (const name of Object.keys(tsBody)) {
 for (const name of SHARED) await emit(name);
 for (const name of STATE) await emit(name);
 for (const name of DECK) await emit(name);
+await emit("DisplayEvent");
 
 const sortKeys = (o) =>
   Object.fromEntries(

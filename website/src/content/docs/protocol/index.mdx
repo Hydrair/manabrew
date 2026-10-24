@@ -6,6 +6,7 @@ description: How a Manabrew engine talks to a client - the prompt protocol for i
 {/* SPDX-License-Identifier: CC-BY-4.0 - see the License section below. */}
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
+import ProtocolType from "../../../components/ProtocolType.astro";
 
 Manabrew separates the **engine** (the rules) from the **client** (the UI). Any
 engine that speaks this protocol can drive the a Manabrew client, and any client
@@ -103,6 +104,14 @@ type ProtocolErrorCode =
   | "unknownActionId"
   | "invalidShape";
 ```
+
+## Display events
+
+`DisplayEvent` is retained in the Rust and TypeScript protocol packages for
+independent implementations. The reference runtime does not currently emit it,
+and the active `StateUpdate` transport does not carry display events.
+
+<ProtocolType type="DisplayEvent" />
 
 ## The prompt catalogue
 
