@@ -158,7 +158,7 @@ export function createCardFoilShader(invalidate: () => void): CardFoilShader {
     printingProcedural: { value: 0, type: "f32" },
   });
   const shader = new Shader({
-    glProgram: getCardFoilProgram(false, false),
+    glProgram: getCardFoilProgram(false, false, 0),
     resources: {
       foilUniforms: group,
       face: Texture.EMPTY.source,
@@ -174,6 +174,13 @@ export function createCardFoilShader(invalidate: () => void): CardFoilShader {
     mask: Texture.EMPTY,
     printing: Texture.EMPTY,
     coverage: Texture.EMPTY,
+  };
+  const syncProgram = () => {
+    shader.glProgram = getCardFoilProgram(
+      false,
+      group.uniforms.faceProcedural > 0 || group.uniforms.printingProcedural > 0,
+      group.uniforms.previewKind,
+    );
   };
   const bindTexture = (role: CardFoilTextureRole, texture: Texture) => {
     textures[role] = texture;
@@ -243,7 +250,7 @@ export function createCardFoilShader(invalidate: () => void): CardFoilShader {
     bindTexture("coverage", Texture.EMPTY);
     group.uniforms.faceProcedural = 0;
     group.uniforms.printingProcedural = 0;
-    shader.glProgram = getCardFoilProgram(false, false);
+    syncProgram();
     group.uniforms.hasPrinting = 0;
     group.uniforms.hasCoverage = 0;
     group.uniforms.facePrepared = 0;
@@ -336,10 +343,7 @@ export function createCardFoilShader(invalidate: () => void): CardFoilShader {
         ]);
         group.uniforms.printArtwork =
           settings?.artwork === false && (layers?.artWindows ?? artWindows).length > 0 ? 0 : 1;
-        shader.glProgram = getCardFoilProgram(
-          false,
-          printing.some((lease) => lease.procedural),
-        );
+        syncProgram();
         if (layers) {
           group.uniforms.cornerRadius = layers.cornerRadius;
           setArtWindows(layers.artWindows);
@@ -479,6 +483,7 @@ export function createCardFoilShader(invalidate: () => void): CardFoilShader {
         shader.resources.caustics = poolLease.texture.source;
       }
       syncMaterial();
+      syncProgram();
     },
     setArtWindows(regions: readonly CardFoilRegion[]) {
       if (artWindows === regions) return;

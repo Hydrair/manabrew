@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Specialize host Card Glint shaders for the requested finish and omit animated surface code from other finishes.
+
 ## [3.64.8](https://github.com/witchesofthehill/manabrew/compare/v3.64.7...v3.64.8) (2026-10-24)
 
 ### Fixes

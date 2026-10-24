@@ -150,11 +150,16 @@ float glintSampleMask(vec2 uv);
 `;
 const programs = new Map<string, GlProgram>();
 
-export function getCardFoilProgram(instanced: boolean, procedural: boolean): GlProgram {
-  const key = `${instanced}:${procedural}`;
+export function getCardFoilProgram(
+  instanced: boolean,
+  procedural: boolean,
+  kind: number,
+): GlProgram {
+  const key = `${instanced}:${procedural}:${kind}`;
   const cached = programs.get(key);
   if (cached) return cached;
   const pair = instanced;
+  const surface = kind >= 5 && kind < 8;
   const vertex = `#version 300 es
 precision highp float;
 precision highp int;
@@ -220,6 +225,16 @@ uniform sampler2D face; uniform sampler2D mask;
 uniform sampler2D printing; uniform sampler2D coverage;`
 }
 ${commonSampling}
+#define GLINT_HOST_BINDINGS
+#define GLINT_FACE_SIZE_BINDING
+#define GLINT_POINTER_BINDING
+const float previewKind=${kind.toFixed(1)};
+uniform vec2 facePixelSize;
+uniform float hasMask;
+uniform float aspect;
+uniform vec2 pointer;
+uniform vec4 artBounds${pair ? ";" : "[8];"}
+${pair ? "uniform vec4 artBounds2;" : ""}
 #define flat uniform
 #define in
 ${foilShader({ sampling: "host", artWindows: pair ? "pair" : "array", liquid: false })}
@@ -231,11 +246,15 @@ ${
 ${PRINT_DOTS_GLSL}`
     : ""
 }
-vec4 glintSurfaceTexture(sampler2D inputMap,vec2 uv);
+${
+  surface
+    ? `vec4 glintSurfaceTexture(sampler2D inputMap,vec2 uv);
 #define texture glintSurfaceTexture
 ${SURFACE_GLSL}
 #undef texture
-vec4 glintSurfaceTexture(sampler2D inputMap,vec2 uv){return texture(inputMap,vec2(uv.x,1.-uv.y));}
+vec4 glintSurfaceTexture(sampler2D inputMap,vec2 uv){return texture(inputMap,vec2(uv.x,1.-uv.y));}`
+    : "uniform float surfaceTime;"
+}
 ${WORN_GLSL}
 ${CARDSTOCK_GLSL}
 #undef in
@@ -268,7 +287,7 @@ float finishCoverage(vec2 uv){return hasCoverage>.5?${instanced ? "texture(cover
 vec3 modernSurface(vec2 uv,vec3 normal,vec3 view,vec2 pixel){
  vec3 base=glintSampleFace(uv).rgb;
  vec3 ink=previewInk(base);
- vec3 color=regularPrinting>0.?ink:previewKind>=5.&&previewKind<8.?animatedSurface(uv,normal):previewFoil(uv,normal,view);
+ vec3 color=regularPrinting>0.?ink:${surface ? "animatedSurface(uv,normal)" : "previewFoil(uv,normal,view)"};
  if(regularPrinting<1.)color=cardstockGloss(uv,ink,color);
  if(wearInfo.x>0.)color=wornSurface(uv,ink,color,normal,view,wearInfo.y,wearInfo.x,previewKind==9.?1.:step(.5,previewKind)*(1.-step(4.5,previewKind)),pixel);
  vec3 under=mix(base,previewLinear(color),finishCoverage(uv));

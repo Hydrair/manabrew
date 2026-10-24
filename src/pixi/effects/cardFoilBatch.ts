@@ -405,11 +405,12 @@ class CardFoilPipe {
           cardFoilBatchCounters.instanceUploadBytes += draw.rows[row].byteLength;
         }
       }
-      const key = lighting * 4 + (procedural ? 2 : 0) + (time === 0 ? 1 : 0);
+      const kind = finish.uniforms.previewKind;
+      const key = kind * 8 + lighting * 4 + (procedural ? 2 : 0) + (time === 0 ? 1 : 0);
       let shader = this.shaders.get(key);
       if (!shader) {
         shader = new Shader({
-          glProgram: getCardFoilProgram(true, procedural),
+          glProgram: getCardFoilProgram(true, procedural, kind),
           resources: {
             frameUniforms: new UniformGroup(
               {
