@@ -18,7 +18,7 @@ import {
 import { HAND_ORDER_OPTIONS } from "@/lib/handOrder";
 import { PlaymatEditorModal } from "@/components/editor/PlaymatEditorModal";
 import { useAssetStore, useAssetsAvailable, useAssetUrl } from "@/stores/useAssetStore";
-import { THEME_PRESETS, type ThemeColors } from "@/themes";
+import { MANABREW_THEME, type ThemeColors } from "@/themes";
 import { useServerStore } from "@/stores/useServerStore";
 import { useGameStore } from "@/stores/useGameStore";
 import { useScryfallStore } from "@/stores/useScryfallStore";
@@ -27,6 +27,7 @@ import { KeybindingsPanel } from "@/components/settings/KeybindingsPanel";
 import { AccountSection } from "@/components/settings/AccountSection";
 import { MyAssetsSection } from "@/components/settings/MyAssetsSection";
 import { CardArtDownloadSection } from "@/components/settings/CardArtDownloadSection";
+import { CardGlintOfflineSection } from "@/components/settings/CardGlintOfflineSection";
 import { PreferenceCard } from "@/components/settings/PreferenceCard";
 import { LanguagePreferenceCard } from "@/components/settings/LanguagePreferenceCard";
 import { toPickerHexColor, parseThemeColor, formatThemeColor } from "@/themes/gameTheme";
@@ -96,9 +97,9 @@ function Button({ variant, className, ...props }: ButtonProps) {
   return (
     <BaseButton
       {...props}
-      variant={selected ? "outline" : variant}
+      variant={variant}
       aria-pressed={selected ? true : props["aria-pressed"]}
-      className={cn(selected && "border-accent", className)}
+      className={className}
     />
   );
 }
@@ -150,11 +151,12 @@ export default function Settings() {
     if (accountTabRequested) setActiveTab("account");
   }
   const [clearingCache, setClearingCache] = useState(false);
-  const [presetOpen, setPresetOpen] = useState(false);
   const [editingThemeColorPath, setEditingThemeColorPath] = useState<string | null>(null);
   const [editingThemeColorValue, setEditingThemeColorValue] = useState("");
   const [themeColorFilter, setThemeColorFilter] = useState("");
-  const DEFAULT_GAME_THEME_COLOR_MAP = getDefaultGameThemeColorMap();
+  const DEFAULT_GAME_THEME_COLOR_MAP = getDefaultGameThemeColorMap(
+    resolvedTheme === "light" ? "light" : "dark",
+  );
   const zoneOrder = prefs.zonePanelOrder;
   const [playmatEditorOpen, setPlaymatEditorOpen] = useState(false);
   const defaultPlaymat = useAssetUrl(prefs.defaultPlaymatAssetId);
@@ -312,6 +314,7 @@ export default function Settings() {
       {activeTab === "keybindings" && <KeybindingsPanel />}
 
       {activeTab === "cache" && <CardArtDownloadSection />}
+      {activeTab === "cache" && <CardGlintOfflineSection />}
 
       {activeTab === "cache" && (
         <section className="space-y-4">
@@ -706,7 +709,7 @@ export default function Settings() {
 
             <PreferenceCard
               title={`Battlefield Card Style`}
-              description={`"Realistic" uses the full printed card image. "Art-forward" shows the art with a crisp name/type overlay. "Mini-frame" frames the art with name and type bars. This setting only affects battlefield cards.`}
+              description={`Manabrew shows a composed card with current game information. Realistic shows the printed scan. Art-forward uses artwork with compact labels. This setting only affects battlefield cards.`}
             >
               <div className="flex items-start gap-4">
                 <div className="flex-1 flex flex-wrap content-start gap-2">
@@ -729,7 +732,7 @@ export default function Settings() {
                     size="sm"
                     onClick={() => prefs.setBattlefieldCardStyle("frame")}
                   >
-                    Mini-frame
+                    Manabrew
                   </Button>
                 </div>
                 <BattlefieldStylePreview style={prefs.battlefieldCardStyle} />
@@ -872,7 +875,7 @@ export default function Settings() {
 
             <PreferenceCard
               title={`Hand Card Style`}
-              description={`Printed card shows the card image. Dynamic view uses the card's current rules and game state; each card can still be switched.`}
+              description={`Manabrew cards show current game information. Realistic shows the printed scan. Each card can still be switched.`}
             >
               <div className="flex flex-wrap gap-2">
                 {INLINE_CARD_STYLE_OPTIONS.map((option) => (
@@ -890,7 +893,7 @@ export default function Settings() {
 
             <PreferenceCard
               title={`Default Stack Card View`}
-              description={`Choose which face stack cards show when they appear. You can still switch individual cards.`}
+              description={`Choose the initial Manabrew or Realistic view for stack cards. Switching views does not flip the card's front/back face.`}
             >
               <div className="flex flex-wrap gap-2">
                 {INLINE_CARD_STYLE_OPTIONS.map((option) => (
@@ -908,7 +911,7 @@ export default function Settings() {
 
             <PreferenceCard
               title={`Card Preview Style`}
-              description={`Printed card shows the full card image. Dynamic view prioritizes current rules, actions, costs, counters, and other game state.`}
+              description={`Manabrew shows current rules and game information. Realistic shows the printed scan. Front/back face selection stays independent.`}
             >
               <div className="flex flex-wrap gap-2">
                 {IN_GAME_CARD_PREVIEW_STYLE_OPTIONS.map((option) => (
@@ -958,7 +961,7 @@ export default function Settings() {
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Theme</h2>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="max-w-xl">
             <div className="rounded-lg border bg-card/40 p-4 space-y-2">
               <Label>App Theme</Label>
               <div className="flex items-center gap-2">
@@ -985,103 +988,6 @@ export default function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">Controls app theme preference.</p>
-            </div>
-
-            <div className="rounded-lg border bg-card/40 p-4 space-y-2">
-              <Label>Color Preset</Label>
-              {(() => {
-                const active = THEME_PRESETS.find((p) => p.id === prefs.appThemePreset);
-                const mode = resolvedTheme === "dark" ? "dark" : "light";
-                return (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setPresetOpen((v) => !v)}
-                      className="w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
-                    >
-                      {active && (
-                        <div className="flex gap-1 shrink-0">
-                          {[
-                            active[mode].background,
-                            active[mode].primary,
-                            active[mode].accent,
-                            active[mode].destructive,
-                          ].map((hsl, i) => (
-                            <div
-                              key={i}
-                              className="w-4 h-4 rounded-full border border-border/50"
-                              style={{ backgroundColor: hsl }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{active?.name ?? "Select preset"}</div>
-                      </div>
-                      <svg
-                        className="h-4 w-4 text-muted-foreground shrink-0"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                      >
-                        <path
-                          d="M4 6l4 4 4-4"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                    {presetOpen && (
-                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg max-h-[min(16rem,50dvh)] overflow-y-auto">
-                        {THEME_PRESETS.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => {
-                              prefs.setAppThemePreset(preset.id);
-                              setPresetOpen(false);
-                            }}
-                            className={
-                              "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40 " +
-                              (prefs.appThemePreset === preset.id ? "bg-primary/5" : "")
-                            }
-                          >
-                            <div className="flex gap-1 shrink-0">
-                              {[
-                                preset[mode].background,
-                                preset[mode].primary,
-                                preset[mode].accent,
-                                preset[mode].destructive,
-                              ].map((hsl, i) => (
-                                <div
-                                  key={i}
-                                  className="w-3.5 h-3.5 rounded-full border border-border/50"
-                                  style={{ backgroundColor: hsl }}
-                                />
-                              ))}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium">{preset.name}</div>
-                              <div className="text-[11px] text-muted-foreground">
-                                {preset.description}
-                              </div>
-                            </div>
-                            {prefs.appThemePreset === preset.id && (
-                              <div className="text-[10px] text-primary font-medium shrink-0">
-                                Active
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              <p className="text-xs text-muted-foreground">
-                Choose a color preset. Works with both light and dark modes.
-              </p>
             </div>
           </div>
 
@@ -1114,7 +1020,6 @@ export default function Settings() {
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {APP_THEME_GROUPS.map((group) => {
-                const activePreset = THEME_PRESETS.find((p) => p.id === prefs.appThemePreset);
                 const mode = resolvedTheme === "dark" ? "dark" : "light";
                 const q = themeColorFilter.toLowerCase();
                 const filteredKeys = q
@@ -1138,8 +1043,8 @@ export default function Settings() {
                     </div>
                     <div className="space-y-1">
                       {filteredKeys.map((key) => {
-                        const presetValue = activePreset?.[mode]?.[key as keyof ThemeColors] ?? "";
-                        const activeValue = prefs.appThemeColorOverrides[mode][key] ?? presetValue;
+                        const defaultValue = MANABREW_THEME[mode][key];
+                        const activeValue = prefs.appThemeColorOverrides[mode][key] ?? defaultValue;
                         return (
                           <div
                             key={key}
@@ -1172,10 +1077,10 @@ export default function Settings() {
                                   aria-label={`${APP_THEME_COLOR_LABELS[key]} value`}
                                   value={editingThemeColorValue}
                                   onChange={(e) => setEditingThemeColorValue(e.target.value)}
-                                  onBlur={() => commitThemeColorEdit(`app.${key}`, presetValue)}
+                                  onBlur={() => commitThemeColorEdit(`app.${key}`, defaultValue)}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter")
-                                      commitThemeColorEdit(`app.${key}`, presetValue);
+                                      commitThemeColorEdit(`app.${key}`, defaultValue);
                                     if (e.key === "Escape") {
                                       setEditingThemeColorPath(null);
                                       setEditingThemeColorValue("");
@@ -1204,7 +1109,7 @@ export default function Settings() {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Override individual colors from the active preset.
+              Override individual Manabrew colors for the current app mode.
             </p>
           </div>
 
@@ -1352,7 +1257,7 @@ export default function Settings() {
               })()}
             </div>
             <p className="text-xs text-muted-foreground">
-              Generated from game theme keys. Defaults come from the active preset.
+              Generated from game theme keys. Defaults come from Manabrew.
             </p>
           </div>
         </section>

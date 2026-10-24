@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { getScryfallManaCost } from "@/api/scryfall";
 import { ManaSymbols } from "@/components/game/ManaSymbols";
 import { peekCard, useScryfallStore } from "@/stores/useScryfallStore";
 import { countManaPips } from "@/lib/limited.utils";
@@ -28,7 +29,7 @@ export function LimitedDeckStats({ cards, className, compact = false }: Props) {
         cardNumber: card.cardNumber,
       });
       if (!cached) continue;
-      const types = cached.type_line ?? "";
+      const types = cached.card_faces?.[0]?.type_line ?? cached.type_line ?? "";
       const isLand = /\bLand\b/i.test(types);
       const isCreature = /\bCreature\b/i.test(types);
       if (isLand) lands += 1;
@@ -39,7 +40,7 @@ export function LimitedDeckStats({ cards, className, compact = false }: Props) {
         const cmc = Math.max(0, Math.min(6, Math.round(cached.cmc ?? 0)));
         curve[cmc] += 1;
         curveSampleSize += 1;
-        const cost = cached.mana_cost ?? "";
+        const cost = getScryfallManaCost(cached) ?? "";
         for (const key of COLOR_KEYS) {
           colors[key] += countManaPips(cost, key);
         }
@@ -109,7 +110,7 @@ export function LimitedDeckStats({ cards, className, compact = false }: Props) {
           {COLOR_KEYS.map((k) => (
             <li key={k} className="flex items-center gap-2">
               <ManaSymbols cost={`{${k}}`} size="sm" />
-              <span className="font-mono tabular-nums">{stats.colors[k]}</span>
+              <span className="tabular-nums lining-nums">{stats.colors[k]}</span>
               <div className="h-1.5 flex-1 rounded bg-muted/40">
                 <div
                   className="h-full rounded bg-primary/60"
@@ -130,7 +131,7 @@ function StatRow({ label, value, total }: { label: string; value: number; total:
   return (
     <li className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono tabular-nums">
+      <span className="tabular-nums lining-nums">
         {value} <span className="text-muted-foreground/70">· {pct}%</span>
       </span>
     </li>

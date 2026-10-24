@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCardFinishPreview } from "@/stores/useCardFinishPreview";
 import type { ClientCardDto } from "@/stores/gameStore.types";
 import type { CardDto, ZoneKind } from "@/protocol/game";
 import { GAME_CARD_DEFAULTS, isFacelessCard } from "@/lib/gameCard";
@@ -40,7 +41,11 @@ import {
   PLAYGROUND_LANDS,
   type PlaygroundScenarioId,
 } from "@/components/dev/boardPlayground.data";
-import { PREVIEW_SCENARIOS } from "./devPreviewScenarios";
+import {
+  applyDevPreviewMechanicAction,
+  devPreviewMechanicActions,
+  PREVIEW_SCENARIOS,
+} from "@/components/dev/devPreviewScenarios";
 import { BoardGameplayPreviewControls } from "./BoardGameplayPreviewControls";
 import { useBoardGameplayPreview } from "./useBoardGameplayPreview";
 import { BoardPlaygroundZone } from "./BoardPlaygroundZone";
@@ -98,9 +103,23 @@ const PREVIEW_VIEWPORTS = [
 
 let previewCardSequence = 0;
 
-export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean }) {
-  const [table, setTable] = useState(() =>
-    createPlaygroundTable(themeEditor ? "theme" : "opening"),
+export function BoardPlayground({
+  themeEditor = false,
+  initialScenario,
+}: {
+  themeEditor?: boolean;
+  initialScenario?: PlaygroundScenarioId;
+}) {
+  const foilAll = useCardFinishPreview((state) => state.foilAll);
+  const [sourceTable, setTable] = useState(() =>
+    createPlaygroundTable(initialScenario ?? (themeEditor ? "theme" : "opening")),
+  );
+  const table = useMemo(
+    () =>
+      foilAll
+        ? { ...sourceTable, cards: sourceTable.cards.map((card) => ({ ...card, foil: true })) }
+        : sourceTable,
+    [sourceTable, foilAll],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetPlayerId, setSheetPlayerId] = useState<string | null>(null);
@@ -305,7 +324,10 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
           toughness: "2",
         };
       } else {
-        const { info } = await useScryfallStore.getState().getCard({ name });
+        const { info } = await useScryfallStore.getState().getCard({
+          name,
+          ...(nameOverride == null && scenario.setCode ? { setCode: scenario.setCode } : {}),
+        });
         if (generation !== loadGeneration.current) return;
         const faces = resolveCardFaces(info);
         const back = nameOverride == null && !!scenario.back && faces.isFlippable;
@@ -369,15 +391,21 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
   };
   const previewActions = useMemo<HandActionOption[]>(() => {
     if (!previewCard) return [];
-    return Array.from({ length: actionCount }, (_, index) => ({
-      kind: "ability",
-      cardId: previewCard.id,
-      actionId: index === 0 ? DEV_MANA_ACTION_ID : `dev-action-${index}`,
-      label: index === 0 ? `Add {G}.` : `Preview test action ${index + 1}.`,
-      cost: index === 0 ? "{T}" : `{${index + 1}}`,
-      isManaAbility: index === 0,
-      abilityIndex: index,
-    }));
+    return [
+      ...devPreviewMechanicActions(previewCard),
+      ...Array.from(
+        { length: actionCount },
+        (_, index): HandActionOption => ({
+          kind: "ability",
+          cardId: previewCard.id,
+          actionId: index === 0 ? DEV_MANA_ACTION_ID : `dev-action-${index}`,
+          label: index === 0 ? `Add {G}.` : `Preview test action ${index + 1}.`,
+          cost: index === 0 ? "{T}" : `{${index + 1}}`,
+          isManaAbility: index === 0,
+          abilityIndex: index,
+        }),
+      ),
+    ];
   }, [previewCard, actionCount]);
   useEffect(() => {
     if (preview.phase !== "open") previewViewSwitchCardIdRef.current = null;
@@ -420,6 +448,10 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
   );
   const handlePreviewAction = (action: HandActionOption) => {
     setLastAction(`Selected ${action.label} (${action.actionId})`);
+    if (action.actionId === "dev-station" || action.actionId === "dev-crew") {
+      updateCard(action.cardId, (card) => applyDevPreviewMechanicAction(card, action));
+      return;
+    }
     if (action.actionId === DEV_MANA_ACTION_ID) {
       updateCard(action.cardId, (card) => ({ ...card, tapped: true }));
       return;
@@ -715,14 +747,14 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
               variant={previewStyle === "printed" ? "selected" : "outline"}
               onClick={() => setPreviewStyle("printed")}
             >
-              Printed preview
+              Realistic preview
             </Button>
             <Button
               size="sm"
               variant={previewStyle === "rules" ? "selected" : "outline"}
               onClick={() => setPreviewStyle("rules")}
             >
-              Rules preview
+              Manabrew preview
             </Button>
             <Button size="sm" variant="outline" onClick={showSelectedPreview} disabled={!targetId}>
               Open selected preview
@@ -828,6 +860,18 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
             onTargetPlayer: gameplay.setSelectedTarget,
             onHoverCard: hover,
             onHoverHandCard: hover,
+            onHoverZoneCards: (cards, bounds) => {
+              if (!cards?.length || !bounds) {
+                preview.handleMouseLeave();
+                return;
+              }
+              preview.handleMouseEnter(cards[0]!, undefined, {
+                anchorOverride: new DOMRect(bounds.x, bounds.y, bounds.width, bounds.height),
+                ignoreTriggerPreference: true,
+                useAnchor: true,
+                useDelay: true,
+              });
+            },
             onLongPressCard: (card, bounds) => inspect(card, bounds, true),
             onRightClickCard:
               previewMode === "right-click"
@@ -893,6 +937,7 @@ export function BoardPlayground({ themeEditor = false }: { themeEditor?: boolean
       {previewStyle === "printed" && (
         <HoverCardPreview
           preview={{ ...preview, hoveredCard: previewCard }}
+          viewportBounds={boardRef.current?.querySelector("canvas")?.getBoundingClientRect()}
           actions={previewActions}
           onSelectAction={handlePreviewAction}
           skipEnterAnimation={skipPreviewEnterAnimation}

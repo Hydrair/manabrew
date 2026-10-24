@@ -1,3 +1,4 @@
+import { UI_FONT_FAMILY } from "@/themes/typography";
 import {
   Container,
   Graphics,
@@ -283,7 +284,7 @@ export class BoardZoneTiles {
     const countText = new Text({
       text: "",
       style: {
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: UI_FONT_FAMILY,
         fontSize: 12,
         fontWeight: "900",
         fill: hexToNum(this.theme.gameTheme.textOnTinted),
@@ -293,7 +294,7 @@ export class BoardZoneTiles {
     const taxText = new Text({
       text: "",
       style: {
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: UI_FONT_FAMILY,
         fontSize: 11,
         fontWeight: "700",
         fill: hexToNum(this.theme.gameTheme.textOnTinted),
@@ -324,6 +325,10 @@ export class BoardZoneTiles {
     container.on("pointerenter", (event: FederatedPointerEvent) => {
       if (event.pointerType === "touch") return;
       if (tile.spec.onOpen) this.setHovered(tile, true);
+      if (tile.spec.previewCards?.length) this.showPreviewCards(tile);
+    });
+    container.on("pointermove", (event: FederatedPointerEvent) => {
+      if (event.pointerType === "touch" || event.buttons !== 0 || this.drag?.moved) return;
       if (tile.spec.previewCards?.length) this.showPreviewCards(tile);
     });
     container.on("pointerleave", () => {

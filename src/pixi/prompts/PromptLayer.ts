@@ -10,7 +10,7 @@ import {
   type Ticker,
 } from "pixi.js";
 import type { Theme } from "@/hooks/useTheme";
-import { withAlpha } from "@/themes/gameTheme";
+import { readableTextColor, withAlpha } from "@/themes/gameTheme";
 import { hexToNum, mixNum } from "@/pixi/colorUtils";
 import { CardSprite } from "@/pixi/CardSprite";
 import {
@@ -113,11 +113,17 @@ export class PromptLayer extends PromptModalLayer {
     this.unsubscribePreferences = usePreferencesStore.subscribe((state, previous) => {
       if (
         state.promptCardStyle === previous.promptCardStyle &&
-        state.mobileHandedness === previous.mobileHandedness
+        state.mobileHandedness === previous.mobileHandedness &&
+        state.inGameCardPreviewSize === previous.inGameCardPreviewSize
       ) {
         return;
       }
-      this.promptCardStates.clear();
+      if (
+        state.promptCardStyle !== previous.promptCardStyle ||
+        state.mobileHandedness !== previous.mobileHandedness
+      ) {
+        this.promptCardStates.clear();
+      }
       this.rebuild();
     });
     this.unsubscribeKeybindings = useKeybindingsStore.subscribe(() => this.rebuild());
@@ -200,9 +206,9 @@ export class PromptLayer extends PromptModalLayer {
   }
 
   destroy(): void {
-    this.mobileCardSearchInput?.blur();
-    this.mobileCardSearchInput?.remove();
-    this.mobileCardSearchInput = null;
+    this.choiceSearchInput?.blur();
+    this.choiceSearchInput?.remove();
+    this.choiceSearchInput = null;
     setVirtualTextInputActive(this, false);
     window.removeEventListener("keydown", this.keyListener);
     window.removeEventListener("keydown", this.onModifierEvent);
@@ -242,8 +248,8 @@ export class PromptLayer extends PromptModalLayer {
     this.activePromptCardId = null;
     this.selectedIds.clear();
     this.counts.clear();
-    this.mobileCardSearchInput?.blur();
-    if (this.mobileCardSearchInput) this.mobileCardSearchInput.value = "";
+    this.choiceSearchInput?.blur();
+    if (this.choiceSearchInput) this.choiceSearchInput.value = "";
     this.selectionFilter = "";
     this.selectionFilterFocused = false;
     this.numberInputFocused = false;
@@ -315,12 +321,13 @@ export class PromptLayer extends PromptModalLayer {
     this.actionPulseNodes = [];
     this.modalOpen = false;
     if (
-      this.mobileCardSearchInput &&
-      (this.spec?.currentPrompt?.input.type !== "chooseCards" ||
+      this.choiceSearchInput &&
+      ((this.spec?.currentPrompt?.input.type !== "chooseCards" &&
+        this.spec?.currentPrompt?.input.type !== "chooseFromSelection") ||
         this.spec?.modalHidden ||
         this.spec?.action.isWaitingForResponse)
     )
-      this.mobileCardSearchInput.blur();
+      this.choiceSearchInput.blur();
     setVirtualTextInputActive(this, false);
     this.modalBody = null;
     this.container.removeChildren().forEach((child) => child.destroy({ children: true }));
@@ -449,7 +456,7 @@ export class PromptLayer extends PromptModalLayer {
       const glowColor =
         effectivePromptType === "chooseAttackers" && action.pendingAttackers.length > 0
           ? this.theme.gameTheme.promptAction.attackAction
-          : this.theme.appTheme.primary;
+          : this.theme.gameTheme.cardRing;
       this.actionGlow = new PromptGlow({
         width,
         height: panelHeight,
@@ -1050,10 +1057,10 @@ export class PromptLayer extends PromptModalLayer {
         icon: "lucide-skip-forward",
         iconSize: 20,
         labelPlacement: "hidden",
-        foreground: this.theme.appTheme.primary,
-        backgroundColor: this.theme.appTheme.primary,
-        backgroundAlpha: 0.2,
-        hoverBackgroundAlpha: 0.3,
+        foreground: this.theme.appTheme["secondary-foreground"],
+        backgroundColor: this.theme.appTheme.secondary,
+        backgroundAlpha: 0.95,
+        hoverBackgroundAlpha: 1,
         title: endCombo ? `${endTitle} (${comboSymbols(endCombo)})` : endTitle,
       });
       const pass = this.makeButton(
@@ -1097,7 +1104,7 @@ export class PromptLayer extends PromptModalLayer {
           fontSize: 10,
           fontWeight: "700",
           letterSpacing: 1,
-          foreground: withAlpha(this.theme.gameTheme.textOnTinted, 0.75),
+          foreground: withAlpha(this.theme.appTheme["primary-foreground"], 0.75),
           backgroundColor: this.theme.gameTheme.canvas.shadow,
           backgroundAlpha: 0.15,
           hoverBackgroundAlpha: 0.3,
@@ -1118,7 +1125,7 @@ export class PromptLayer extends PromptModalLayer {
         fontWeight: "900",
         letterSpacing: 1.44,
         foreground: this.theme.appTheme["primary-foreground"],
-        backgroundColor: this.theme.gameTheme.textOnTinted,
+        backgroundColor: this.theme.appTheme["primary-foreground"],
         backgroundAlpha: morphed ? 0.15 : 0,
         hoverBackgroundAlpha: morphed ? 0.2 : 0.1,
         shortcut: combo ? comboSymbols(combo) : undefined,
@@ -1143,7 +1150,7 @@ export class PromptLayer extends PromptModalLayer {
       .roundRect(0, 0, availableWidth, height, 8)
       .fill({ color: 0xffffff });
     const ring = new Graphics().roundRect(0.5, 0.5, availableWidth - 1, height - 1, 7.5).stroke({
-      color: hexToNum(this.theme.gameTheme.textOnTinted),
+      color: hexToNum(this.theme.appTheme["primary-foreground"]),
       width: 1,
       alpha: 0.2,
     });
@@ -1157,7 +1164,7 @@ export class PromptLayer extends PromptModalLayer {
         .moveTo(pass.buttonWidth, 0)
         .lineTo(pass.buttonWidth, height)
         .stroke({
-          color: hexToNum(this.theme.gameTheme.textOnTinted),
+          color: hexToNum(this.theme.appTheme["primary-foreground"]),
           width: 1,
           alpha: 0.2,
         });
@@ -1315,19 +1322,22 @@ export class PromptLayer extends PromptModalLayer {
       ),
     );
     const strip = new Container();
+    const foreground = minimal
+      ? this.theme.gameTheme.textOnTinted
+      : this.theme.appTheme["card-foreground"];
     const stripBackground = new Graphics()
       .roundRect(0, 0, stripWidth, 36, 8)
-      .fill({ color: hexToNum(this.theme.gameTheme.textOnTinted), alpha: 0.05 })
+      .fill({ color: hexToNum(foreground), alpha: 0.05 })
       .stroke({
-        color: hexToNum(this.theme.gameTheme.textOnTinted),
+        color: hexToNum(foreground),
         width: 1,
         alpha: 0.2,
       });
-    const crosshair = this.makeIcon("lucide-crosshair", 14, this.theme.gameTheme.textOnTinted);
+    const crosshair = this.makeIcon("lucide-crosshair", 14, foreground);
     crosshair.position.set(14, 18);
     crosshair.alpha = 0.8;
     this.actionPulseNodes.push({ node: crosshair, maxAlpha: 0.8 });
-    const text = promptRichText(label, 12, this.theme.gameTheme.textOnTinted, stripWidth - 38, {
+    const text = promptRichText(label, 12, foreground, stripWidth - 38, {
       weight: "600",
       align: "center",
       letterSpacing: 0.3,
@@ -1609,9 +1619,16 @@ export class PromptLayer extends PromptModalLayer {
     const control = action.compactPhaseControl;
     if (!control) return null;
     const label = PHASES.find((phase) => phase.id === action.step)?.short ?? action.step;
-    const text = promptText(label, 10, this.theme.gameTheme.textOnTinted, {
-      weight: "800",
-    });
+    const text = promptText(
+      label,
+      10,
+      readableTextColor(
+        this.theme.gameTheme.phaseStrip.background,
+        this.theme.gameTheme.canvas.shadow,
+        this.theme.gameTheme.textOnTinted,
+      ),
+      { weight: "800" },
+    );
     const width = Math.max(
       COMPACT_PHASE_PILL_MIN_WIDTH,
       Math.ceil(text.width) + COMPACT_PHASE_PILL_PADDING_X * 2,
@@ -1683,7 +1700,11 @@ export class PromptLayer extends PromptModalLayer {
   private makeActionMenuButton(minimal: boolean): ActionViewLayout {
     const size = minimal ? 44 : 18;
     const button = new Container();
-    const icon = this.makeIcon("lucide-settings", 14, this.theme.gameTheme.textOnTinted);
+    const icon = this.makeIcon(
+      "lucide-settings",
+      14,
+      minimal ? this.theme.gameTheme.textOnTinted : this.theme.appTheme["card-foreground"],
+    );
     icon.position.set(size / 2, size / 2);
     button.addChild(icon);
     button.eventMode = "static";
@@ -1732,11 +1753,12 @@ export class PromptLayer extends PromptModalLayer {
         iconSize: 12,
         labelPlacement: "hidden",
         outline: true,
-        backgroundColor: this.theme.gameTheme.textOnTinted,
-        backgroundAlpha: open ? 0.15 : 0.05,
-        borderColor: open ? this.theme.gameTheme.textOnTinted : this.theme.appTheme.border,
-        hoverBackgroundAlpha: open ? 0.2 : 0.1,
-        hoverBorderAlpha: open ? 0.3 : 1,
+        foreground: this.theme.appTheme["accent-foreground"],
+        backgroundColor: this.theme.appTheme.accent,
+        backgroundAlpha: open ? 0.95 : 0.5,
+        borderColor: this.theme.appTheme.border,
+        hoverBackgroundAlpha: 1,
+        hoverBorderAlpha: 1,
         pressOffsetY: 1,
         borderAlpha: open ? 0.3 : 0.6,
         width: 22,
@@ -1802,14 +1824,24 @@ export class PromptLayer extends PromptModalLayer {
         iconSize: minimal ? 16 : 12,
         labelPlacement: minimal ? "stacked" : undefined,
         outline: true,
-        foreground: minimal ? this.theme.gameTheme.textOnTinted : undefined,
-        backgroundColor: this.theme.gameTheme.textOnTinted,
-        backgroundAlpha: minimal ? (fullControl ? 0.12 : 0) : fullControl ? 0.15 : 0.05,
-        borderColor: fullControl ? this.theme.gameTheme.textOnTinted : this.theme.appTheme.border,
-        hoverBackgroundAlpha: fullControl ? 0.2 : 0.1,
-        hoverBorderAlpha: fullControl ? 0.3 : 1,
+        foreground: fullControl
+          ? this.theme.appTheme["selection-foreground"]
+          : minimal
+            ? this.theme.gameTheme.textOnTinted
+            : this.theme.appTheme["accent-foreground"],
+        backgroundColor: fullControl
+          ? this.theme.appTheme.selection
+          : minimal
+            ? this.theme.gameTheme.textOnTinted
+            : this.theme.appTheme.accent,
+        backgroundAlpha: fullControl ? 0.95 : minimal ? 0 : 0.5,
+        borderColor: fullControl
+          ? this.theme.appTheme["selection-border"]
+          : this.theme.appTheme.border,
+        hoverBackgroundAlpha: fullControl ? 1 : minimal ? 0.1 : 0.95,
+        hoverBorderAlpha: 1,
         pressOffsetY: 1,
-        borderAlpha: minimal ? (fullControl ? 0.35 : 0) : fullControl ? 0.3 : 0.6,
+        borderAlpha: minimal && !fullControl ? 0 : 0.8,
         disabled,
         width: minimal ? 44 : fullControl ? 88 : 86,
         height: minimal ? 44 : 22,
@@ -1853,6 +1885,8 @@ export class PromptLayer extends PromptModalLayer {
   private makeActionCardThumbnail(card: CardDto): Container {
     const container = new Container();
     const sprite = new CardSprite(card, "hand");
+    sprite.onVisualChange = this.callbacks.onRenderRequested;
+    sprite.setHandRulesView(usePreferencesStore.getState().promptCardStyle === "rules");
     const place = () => {
       sprite.scale.set(1);
       const scale = Math.min(
@@ -2173,7 +2207,7 @@ export class PromptLayer extends PromptModalLayer {
     if ((modal && !modal.contains(this.app.canvas)) || event.defaultPrevented || event.isComposing)
       return;
     if (!this.spec || !this.modalOpen) return;
-    if (event.target === this.mobileCardSearchInput) return;
+    if (event.target === this.choiceSearchInput) return;
     const primaryActionKey = event.key === "Enter" || event.code === "Space";
     if (
       !this.selectionFilterFocused &&
@@ -2325,7 +2359,7 @@ export class PromptLayer extends PromptModalLayer {
       const remaining =
         input.totalDamage -
         Object.values(this.damageAssigned).reduce((sum, value) => sum + value, 0);
-      if (remaining === 0 && this.damageLegallyOrdered(input, assignees)) {
+      if (remaining === 0 && this.damageAssignmentLegal(input)) {
         event.preventDefault();
         this.spec.respond({
           type: "combatDamageAssignmentDecision",

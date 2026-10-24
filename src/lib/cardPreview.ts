@@ -1,4 +1,5 @@
 import type { CardDto } from "@/protocol/game";
+import { gameCardFaceIndex } from "@/lib/gameCard";
 
 export type PreviewCard = CardDto & { zoneId?: string };
 export interface PreviewPointerInput {
@@ -17,6 +18,7 @@ export const PREVIEW_TIMING = {
   leaveGraceMs: 120,
   enterMs: 220,
   exitMs: 130,
+  flipHalfMs: 140,
   battlefieldHoverOutHoldMs: 60,
 } as const;
 
@@ -25,6 +27,10 @@ export interface PreviewShowOptions {
   anchorRect?: DOMRect | null;
   placement?: PreviewPlacement;
   delayMs?: number;
+}
+
+export interface PreviewFlipOptions {
+  sticky?: boolean;
 }
 
 export interface PreviewSnapshot {
@@ -133,9 +139,17 @@ export class CardPreviewMachine {
     this.hoverEnd();
   }
 
-  flip(): void {
+  flip(options?: PreviewFlipOptions): void {
     if (!this.snapshot.card) return;
-    this.emit({ ...this.snapshot, showBackFace: !this.snapshot.showBackFace });
+    if (options?.sticky) {
+      this.clearShowTimer();
+      this.clearGraceTimer();
+    }
+    this.emit({
+      ...this.snapshot,
+      sticky: this.snapshot.sticky || !!options?.sticky,
+      showBackFace: !this.snapshot.showBackFace,
+    });
   }
 
   setSequence(cards: readonly PreviewCard[]): void {
@@ -195,7 +209,7 @@ export class CardPreviewMachine {
       phase: "open",
       card,
       sticky,
-      showBackFace: card.isTransformed,
+      showBackFace: gameCardFaceIndex(card) === 1,
       mousePos: options.pointer ?? this.snapshot.mousePos,
       anchorRect: options.anchorRect ?? null,
       placement: options.placement ?? "auto",

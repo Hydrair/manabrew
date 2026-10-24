@@ -103,8 +103,6 @@ export default function DeckEditor() {
   const isTouch = useIsTouch();
   const shortTouch = shortScreen && isTouch;
   const {
-    removeFromSide,
-    removeFromMaybe,
     currentDeck,
     tagCard,
     untagCard,
@@ -471,7 +469,6 @@ export default function DeckEditor() {
   }
   useTopBarOverride({
     title: view === "editor" ? "Deck Editor" : undefined,
-    onBack: view === "editor" ? handleBack : undefined,
   });
   useKeybindings({
     "card-search-focus": () => {
@@ -554,11 +551,7 @@ export default function DeckEditor() {
         toast.error(`${card.identity.name} is not eligible for the command zone`);
         return;
       }
-      executeDeckEdit(`Set ${card.identity.name} in the command zone`, () => {
-        setCommander(card);
-        if (activeId.startsWith("deck-sideboard-")) removeFromSide(card.identity.id);
-        else if (activeId.startsWith("deck-maybeboard-")) removeFromMaybe(card.identity.id);
-      });
+      executeDeckEdit(`Set ${card.identity.name} in the command zone`, () => setCommander(card));
       toast.success(`Set ${card.identity.name} in the command zone`, {
         action: {
           label: `Undo`,
