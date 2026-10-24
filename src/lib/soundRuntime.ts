@@ -17,7 +17,7 @@ const APP_SOUNDS = {
   },
   buttonClick: {
     alias: "sound.app.button-click",
-    src: "/sounds/button-click.wav",
+    src: "/sounds/button-click2.wav",
     volume: 0.5,
     cooldownMs: 50,
   },
