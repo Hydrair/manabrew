@@ -1,7 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { Modal } from "./Modal";
 import { Button } from "@/components/ui/button";
-import { SoundControls } from "@/components/SoundControls";
 import {
   CARD_SIZE_MULTIPLIER_MAX,
   CARD_SIZE_MULTIPLIER_MIN,
@@ -85,10 +84,6 @@ export function GameSettingsModal({ onClose }: { onClose: () => void }) {
         </p>
       </Modal.Header>
       <Modal.Body className="space-y-4">
-        <Section title="Audio">
-          <SoundControls />
-          <p className="text-xs text-muted-foreground">Mute or adjust the app-wide sound volume.</p>
-        </Section>
         <Section title="Cards and previews">
           <Choice
             label="Sort hand"

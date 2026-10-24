@@ -33,6 +33,7 @@ import {
   EliminatedModal,
   GameSettingsModal,
   LeaveGameModal,
+  SoundSettingsModal,
 } from "@/components/game/modals";
 import type { StackCardSpec, StackSpec } from "@/pixi/stack/stack.types";
 import { useCastingState } from "@/hooks/useCastingState";
@@ -338,6 +339,7 @@ export default function Game({ exitTo }: GameProps = {}) {
   const [handCardLifted, setHandCardLifted] = useState(false);
   const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const [gameSettingsOpen, setGameSettingsOpen] = useState(false);
+  const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
   const [eliminatedModalOpen, setEliminatedModalOpen] = useState(false);
   const eliminatedModalShownRef = useRef(false);
   const [leaveGameModalOpen, setLeaveGameModalOpen] = useState(false);
@@ -1269,6 +1271,7 @@ export default function Game({ exitTo }: GameProps = {}) {
       setConcedeModalOpen(false);
       setLeaveGameModalOpen(false);
       setGameSettingsOpen(false);
+      setSoundSettingsOpen(false);
       setCombatDetailsOpen(false);
       closeZoneViewer();
       closePlayModePicker();
@@ -2673,6 +2676,7 @@ export default function Game({ exitTo }: GameProps = {}) {
               open={boardMenuOpen}
               onOpenChange={setBoardMenuOpen}
               onOpenSettings={() => setGameSettingsOpen(true)}
+              onOpenSoundSettings={() => setSoundSettingsOpen(true)}
               onOpenCombat={() => setCombatDetailsOpen(true)}
               onConcede={handleConcede}
               eliminated={iAmEliminated}
@@ -2698,6 +2702,7 @@ export default function Game({ exitTo }: GameProps = {}) {
         )}
 
       {gameSettingsOpen && <GameSettingsModal onClose={() => setGameSettingsOpen(false)} />}
+      {soundSettingsOpen && <SoundSettingsModal onClose={() => setSoundSettingsOpen(false)} />}
       {combatDetailsOpen && (
         <CombatBreakdownModal
           attackerIds={
