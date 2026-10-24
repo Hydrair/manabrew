@@ -2025,14 +2025,7 @@ export default function Game({ exitTo }: GameProps = {}) {
     stackItem.sourceCard
       ? stackObjectToCard(stackItem)
       : (visibleCardsById.get(stackItem.sourceId) ?? stackCardsBySourceId.get(stackItem.sourceId)!);
-  const activeFlashCard: CardDto | null = useMemo(() => {
-    if (!activeFlash || activeFlash.kind !== "card") return null;
-    return (
-      visibleCardsById.get(activeFlash.cardId) ??
-      stackCardsBySourceId.get(activeFlash.cardId) ??
-      null
-    );
-  }, [activeFlash, visibleCardsById, stackCardsBySourceId]);
+  const activeFlashCard: CardDto | null = activeFlash?.kind === "card" ? activeFlash.card : null;
   const zonePreviewPanel = viewingZone && modalPanel === topModal() ? modalPanel : null;
   useEffect(() => {
     zonePreviewScope.current = zonePreviewPanel;
@@ -2257,11 +2250,8 @@ export default function Game({ exitTo }: GameProps = {}) {
   const stackSpec: StackSpec = {
     cards: stackCards,
     flash:
-      shouldRenderStackFlashCard && activeFlashCard && activeFlash
-        ? {
-            token: `${activeFlash.cardId}:${activeFlash.cardName}:${activeFlash.setCode}`,
-            card: activeFlashCard,
-          }
+      shouldRenderStackFlashCard && activeFlashCard
+        ? { token: activeFlashCard.id, card: activeFlashCard }
         : null,
     showPreStackFlash: shouldShowPreStackFlash,
     collapsed: debugStackCard === null && stackCollapsed,

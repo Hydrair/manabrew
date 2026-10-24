@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { applyDisplay, applyPrompt, applyState } from "./gameStore.constants";
+import { applyPrompt, applyState } from "./gameStore.constants";
 import type { GameState } from "./gameStore.types";
 import type { Prompt } from "@/protocol";
 import type { GameViewDto } from "@/protocol/game";
@@ -74,21 +74,11 @@ describe("UI message handling (engine -> store)", () => {
     expect((store.get() as { currentPrompt: unknown }).currentPrompt).toBeNull();
   });
 
-  it("applyDisplay enqueues an animation and never sets a prompt", () => {
+  it("a flashed state change enqueues behind its flash and never sets a prompt", () => {
     const store = makeStoreStub("player-0");
-    applyDisplay(
-      {
-        sequence: 1,
-        eventType: "game.card.play",
-        origin: { type: "card", cardId: "card-1" },
-        count: 1,
-        context: {
-          kind: "card",
-          cardName: "Black Lotus",
-          setCode: "LEA",
-          playerId: "player-0",
-        },
-      },
+    applyState({ gameId: "g", turn: 1 } as GameViewDto, "test", store.set, store.get);
+    applyState(
+      { gameId: "g", turn: 2, activePlayerId: "player-0" } as GameViewDto,
       "test",
       store.set,
       store.get,

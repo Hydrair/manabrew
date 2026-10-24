@@ -10,7 +10,6 @@ import type {
   SealedConfig,
   StateUpdate,
 } from "@/protocol";
-import type { DisplayEvent } from "@/protocol/display";
 export type { DraftConfig, EngineKind, GameFormat, PlayerDeckInfo, SealedConfig } from "@/protocol";
 
 export type AiController = "manabot" | "forge";
@@ -144,7 +143,6 @@ export type StateEnvelope =
       fingerprint: string;
       patch: unknown;
     }
-  | { kind: "display"; forPlayer?: string; event: DisplayEvent }
   | { kind: "prompt"; forPlayer: string; prompt: Prompt }
   | { kind: "error"; forPlayer: string; error: ProtocolError }
   | { kind: "response"; fromPlayer: string; promptId: number; action: PromptOutput }

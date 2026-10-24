@@ -27,17 +27,12 @@ Enforcing the rules is up to the particular engine implementing the protocol.
 
 ## Message families
 
-The engine → client channel carries **four separate kinds of message**:
+The engine → client channel carries **three separate kinds of message**:
 
 <CardGrid>
   <Card title="state" icon="seti:db">
     A `StateUpdate` carrying authoritative game state. This may contain a full [`gameView`](/protocol/game-view/)⁠, or a [`patch`](/protocol/game-view/#state-patches) against the client’s current view. 
     StateUpdate is the **only** carrier of authoritative game state; the client applies updates in order and renders from the resulting view.
-  </Card>
-  <Card title="display" icon="sparkles">
-    A [`DisplayEvent`](/protocol/display-events/) - a transient semantic event carrying no
-    authoritative state. One event can independently drive client audio, animation, haptics, or
-    accessibility feedback without prescribing presentation assets.
   </Card>
   <Card title="prompt" icon="comment">
     An `AgentPrompt` - a **call to action**. The engine has paused and needs a decision from a

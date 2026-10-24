@@ -156,12 +156,11 @@ const definedUnder = (frag) =>
     .sort();
 
 const STATE = definedUnder(`${SEP}game${SEP}`);
-const DISPLAY = definedUnder(`${SEP}display${SEP}`);
-const DECK = definedUnder("deck_dto.rs").filter((t) => !STATE.includes(t) && !DISPLAY.includes(t));
+const DECK = definedUnder("deck_dto.rs").filter((t) => !STATE.includes(t));
 // The "shared" supporting types are derived, not hand-listed: the transitive
 // closure of every type the prompt *arguments* (the *Input types) reference,
 // minus the prompt messages and anything already homed on a page of its own
-// (game state, display events, deck). Adding a prompt that references a new DTO
+// (game state, deck). Adding a prompt that references a new DTO
 // grows this automatically; a response-only type (e.g. ManaSourceAction) stays off it.
 const SHARED = (() => {
   const out = new Set();
@@ -177,12 +176,10 @@ const SHARED = (() => {
     out.add(t);
     queue.push(...rawRefs(t, tsBody[t]));
   }
-  return [...out]
-    .filter((t) => !STATE.includes(t) && !DISPLAY.includes(t) && !DECK.includes(t))
-    .sort();
+  return [...out].filter((t) => !STATE.includes(t) && !DECK.includes(t)).sort();
 })();
 
-const DOCUMENTED = new Set([...SHARED, ...STATE, ...DISPLAY, ...DECK]);
+const DOCUMENTED = new Set([...SHARED, ...STATE, ...DECK]);
 
 function refsOf(name, body) {
   return rawRefs(name, body)
@@ -208,7 +205,6 @@ for (const name of Object.keys(tsBody)) {
 }
 for (const name of SHARED) await emit(name);
 for (const name of STATE) await emit(name);
-for (const name of DISPLAY) await emit(name);
 for (const name of DECK) await emit(name);
 
 const sortKeys = (o) =>
@@ -223,11 +219,10 @@ const json = JSON.stringify({
   prompts: sortKeys(prompts),
   shared: SHARED,
   state: STATE,
-  display: DISPLAY,
   deck: DECK,
   types: sortKeys(types),
 });
 writeFileSync(OUT, await prettier.format(json, { parser: "json", filepath: OUT }));
 console.log(
-  `wrote ${Object.keys(types).length} types (${Object.keys(prompts).length} prompts, ${STATE.length} state, ${DISPLAY.length} display, ${DECK.length} deck) -> ${OUT}`,
+  `wrote ${Object.keys(types).length} types (${Object.keys(prompts).length} prompts, ${STATE.length} state, ${DECK.length} deck) -> ${OUT}`,
 );

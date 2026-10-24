@@ -81,7 +81,7 @@ All game modals use the `Modal` compound:
 </Modal>
 ```
 
-Use `Modal.Close` for buttons and `Modal.CloseShortcut` for remappable keybindings that dismiss a dialog so both paths finish the exit transition before unmounting. `Modal` owns the nested-dialog stack, focus containment, topmost Escape handling, backdrop dismissal, and reduced-motion-aware entry and exit transitions.
+Use `Modal.Close` for buttons and `Modal.CloseShortcut` for remappable keybindings that dismiss a dialog so both paths finish the exit transition before unmounting. `Modal` owns the nested-dialog stack, focus containment, topmost Escape handling, backdrop dismissal, reduced-motion-aware entry and exit transitions, and the button-click sound for every button in its panel. Do not add click sounds to individual modal buttons.
 
 `PromptModalLayer.createModalShell` owns vertical touch scrolling for overflowing engine prompts, including card choices and reveals. Keep it independent of compact mode: iPads above `SHORT_SCREEN_QUERY` use the desktop grid and still need swipes. Scroll gestures cancel card long-press, suppress release taps, and yield to an active card drag.
 

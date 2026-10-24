@@ -56,7 +56,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public final class ManaBrewInteractiveSession {
 
@@ -68,11 +67,6 @@ public final class ManaBrewInteractiveSession {
     private volatile String latestPromptJson;
     private volatile int promptedPlayerIndex = -1;
     private long promptSeq;
-    private boolean actionRejectedBeforeNextPrompt;
-    private List<ConcurrentLinkedQueue<DisplayEventProjector.Event>> displayEventsByPlayer =
-            List.of();
-    private long[] displaySequences = new long[0];
-    private DisplayEventProjector displayEventProjector;
     private volatile boolean closed;
     private volatile Thread gameThread;
     private static volatile InteractiveBridge bridge;
@@ -160,37 +154,6 @@ public final class ManaBrewInteractiveSession {
         this.game = Objects.requireNonNull(game, "game");
         this.botSeats = Set.copyOf(botSeats);
         this.snapshotRecording = snapshotRecording;
-        final int playerCount = game.getRegisteredPlayers().size();
-        final List<ConcurrentLinkedQueue<DisplayEventProjector.Event>> queues =
-                new ArrayList<>(playerCount);
-        for (int playerIndex = 0; playerIndex < playerCount; playerIndex++) {
-            queues.add(new ConcurrentLinkedQueue<>());
-        }
-        displayEventsByPlayer = queues;
-        displaySequences = new long[playerCount];
-        displayEventProjector = new DisplayEventProjector(game, new DisplayEventProjector.Sink() {
-            @Override
-            public void broadcast(
-                    final DisplayEventProjector.EventType eventType,
-                    final DisplayEventProjector.Origin origin,
-                    final int count,
-                    final DisplayEventProjector.Context context
-            ) {
-                enqueueBroadcastDisplayEvent(eventType, origin, count, context);
-            }
-
-            @Override
-            public void recipient(
-                    final int playerIndex,
-                    final DisplayEventProjector.EventType eventType,
-                    final DisplayEventProjector.Origin origin,
-                    final int count,
-                    final DisplayEventProjector.Context context
-            ) {
-                enqueueDisplayEvent(playerIndex, eventType, origin, count, context);
-            }
-        });
-        game.subscribeToEvents(displayEventProjector);
         this.handKnowledge = new HandKnowledge(game, botSeats);
     }
 
@@ -271,79 +234,6 @@ public final class ManaBrewInteractiveSession {
 
     public String getLatestPromptJson() {
         return latestPromptJson;
-    }
-
-    String drainDisplayEventsJson(final int playerIndex) {
-        if (playerIndex < 0 || playerIndex >= displayEventsByPlayer.size()) {
-            return "[]";
-        }
-        final List<DisplayEventProjector.Event> events = new ArrayList<>();
-        final ConcurrentLinkedQueue<DisplayEventProjector.Event> queue =
-                displayEventsByPlayer.get(playerIndex);
-        DisplayEventProjector.Event event;
-        while ((event = queue.poll()) != null) {
-            events.add(event);
-        }
-        return GSON.toJson(events);
-    }
-
-    void publishActionRejected(final int playerIndex, final long promptId) {
-        displayEventProjector.publishActionRejected(playerIndex, promptId);
-    }
-
-    private synchronized void enqueueBroadcastDisplayEvent(
-            final DisplayEventProjector.EventType eventType,
-            final DisplayEventProjector.Origin origin,
-            final int count,
-            final DisplayEventProjector.Context context
-    ) {
-        for (int playerIndex = 0; playerIndex < displayEventsByPlayer.size(); playerIndex++) {
-            enqueueDisplayEventLocked(playerIndex, eventType, origin, count, context);
-        }
-    }
-
-    private synchronized void enqueueDisplayEvent(
-            final int playerIndex,
-            final DisplayEventProjector.EventType eventType,
-            final DisplayEventProjector.Origin origin,
-            final int count,
-            final DisplayEventProjector.Context context
-    ) {
-        enqueueDisplayEventLocked(playerIndex, eventType, origin, count, context);
-    }
-
-    private void enqueueDisplayEventLocked(
-            final int playerIndex,
-            final DisplayEventProjector.EventType eventType,
-            final DisplayEventProjector.Origin origin,
-            final int count,
-            final DisplayEventProjector.Context context
-    ) {
-        if (playerIndex < 0 || playerIndex >= displayEventsByPlayer.size()) {
-            return;
-        }
-        final long sequence = ++displaySequences[playerIndex];
-        final DisplayEventProjector.Event event =
-                new DisplayEventProjector.Event(sequence, eventType, origin, count, context);
-        displayEventsByPlayer.get(playerIndex).offer(event);
-    }
-
-    private void flushDisplayEventsToBridge(final InteractiveBridge currentBridge) {
-        for (int playerIndex = 0; playerIndex < displayEventsByPlayer.size(); playerIndex++) {
-            final ConcurrentLinkedQueue<DisplayEventProjector.Event> queue =
-                    displayEventsByPlayer.get(playerIndex);
-            DisplayEventProjector.Event event;
-            while ((event = queue.poll()) != null) {
-                currentBridge.publishDisplay(playerIndex, GSON.toJson(event));
-            }
-        }
-    }
-
-    public void flushDisplayEventsToBridge() {
-        final InteractiveBridge currentBridge = bridge;
-        if (currentBridge != null) {
-            flushDisplayEventsToBridge(currentBridge);
-        }
     }
 
     public String getSnapshotJson(final int viewer) {
@@ -516,7 +406,6 @@ public final class ManaBrewInteractiveSession {
                         + " turn=" + game.getPhaseHandler().getTurn()
                         + " action=" + action);
                 invalid.printStackTrace(System.err);
-                actionRejectedBeforeNextPrompt = true;
                 publishPriorityPrompt(playerId, actionsForPrompt, untappableCards);
             }
         }
@@ -672,7 +561,6 @@ public final class ManaBrewInteractiveSession {
                         + " canConfirm=" + canConfirm + " canCancel=" + canCancel
                         + " action=" + action);
                 invalid.printStackTrace(System.err);
-                actionRejectedBeforeNextPrompt = true;
                 publishManaPaymentPrompt(
                         playerId, payingFor, remainingCost, tappableSources, untappableCards, convokeSources,
                         waterbendSources, waterbentCards, delveSources, delvedCards, canConfirm, canCancel,
@@ -1597,7 +1485,6 @@ public final class ManaBrewInteractiveSession {
                     return option;
                 }
             }
-            actionRejectedBeforeNextPrompt = true;
             publishOptionPrompt(kind, playerId, options, 1, 1, sourceCardId, description);
         }
         return options.isEmpty() ? "" : options.get(0);
@@ -2089,7 +1976,6 @@ public final class ManaBrewInteractiveSession {
         while (true) {
             final InteractiveBridge currentBridge = bridge;
             if (currentBridge != null && actions.isEmpty() && !closed && !game.isGameOver()) {
-                flushDisplayEventsToBridge(currentBridge);
                 submitAction(currentBridge.exchange(promptedPlayerIndex, latestPromptJson));
             }
             final JsonObject action = actions.poll(1, java.util.concurrent.TimeUnit.SECONDS);
@@ -3114,17 +3000,6 @@ public final class ManaBrewInteractiveSession {
                 sourceCard(promptedPlayerIndex, sourceCardId),
                 sourceAbilityText(sourceCardId),
                 input);
-        final boolean rejected = actionRejectedBeforeNextPrompt
-                || input.has("error") && !input.get("error").isJsonNull();
-        actionRejectedBeforeNextPrompt = false;
-        if (rejected) {
-            displayEventProjector.publishActionRejected(promptedPlayerIndex, promptId);
-        } else {
-            displayEventProjector.publishPrompt(
-                    promptedPlayerIndex,
-                    promptId,
-                    input.has("type") ? input.get("type").getAsString() : null);
-        }
     }
 
     private static int parsePlayerSlot(final String decidingPlayerId) {

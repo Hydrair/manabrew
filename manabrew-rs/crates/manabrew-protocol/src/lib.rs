@@ -1,6 +1,6 @@
 //! Engine-free DTOs shared by the game clients: decks, the game-domain types,
-//! prompts, display events and the agent transport envelopes. The relay wire
-//! protocol lives in `manabrew-relay-protocol`, which depends on this crate.
+//! prompts and the agent transport envelopes. The relay wire protocol lives in
+//! `manabrew-relay-protocol`, which depends on this crate.
 /// This crate's version, which is also the version `@manabrew/protocol`
 /// publishes at: `publish-protocol.yml` reads it out of this crate's
 /// `Cargo.toml` and passes it to `npm version`. The generated `VERSION`
@@ -12,7 +12,6 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod deck_dto;
-pub mod display;
 pub mod game;
 pub mod prompts;
 pub mod telemetry;

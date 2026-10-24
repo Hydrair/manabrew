@@ -84,7 +84,6 @@ import {
   isForgeWasmHostingEnabled,
   setForgeWasmActive,
 } from "@/lib/forgeWasm";
-import type { DisplayEvent } from "@/protocol/display";
 import forgeWorkerUrl from "@forge-wasm/forge-engine.worker.js?url";
 // The seat protocol lives with @manabrew/forge-wasm, which drives the same
 // worker, so there is one implementation rather than one per consumer.
@@ -212,7 +211,6 @@ type WorkerMessage = WorkerResponse | WorkerEvent;
 type EngineMessage = {
   kind?: string;
   state?: unknown;
-  event?: unknown;
   prompt?: unknown;
   error?: unknown;
 };
@@ -361,7 +359,7 @@ class WorkerBridge {
     // `arrivedAt` is stamped in the seat reader before the parse, so parsing a
     // state frame counts as this machine's work, the same cut the relay socket
     // makes.
-    if (msg?.kind === "state" || msg?.kind === "prompt" || msg?.kind === "display") {
+    if (msg?.kind === "state" || msg?.kind === "prompt") {
       noteReplyFrameArrived(arrivedAt);
     }
     try {
@@ -384,9 +382,6 @@ class WorkerBridge {
     switch (msg?.kind) {
       case "state":
         this.eventBus.emit("game:state", msg.state);
-        break;
-      case "display":
-        this.eventBus.emit("game:display", msg.event);
         break;
       case "error":
         this.eventBus.emit("game:error", msg.error);
@@ -1051,14 +1046,6 @@ class WebServerApi implements IServerApi {
             : { kind: "state", forPlayer, state, fingerprint },
           targetPlayer,
         );
-      } else if (msg.kind === "display") {
-        const targetPlayer = this.enginePlayerName(forPlayer);
-        if (targetPlayer) {
-          void this.broadcastState(
-            { kind: "display", forPlayer, event: msg.event as DisplayEvent },
-            targetPlayer,
-          );
-        }
       } else if (msg.kind === "prompt") {
         const envelope = { kind: "prompt", forPlayer, prompt: msg.prompt };
         this.pendingRelayPrompts.set(forPlayer, envelope);
@@ -1869,10 +1856,7 @@ class WebServerApi implements IServerApi {
       const forPlayer = (envelope as { forPlayer?: string }).forPlayer;
       if (
         frameAt !== undefined &&
-        (envelope.kind === "state" ||
-          envelope.kind === "stateDelta" ||
-          envelope.kind === "prompt" ||
-          envelope.kind === "display")
+        (envelope.kind === "state" || envelope.kind === "stateDelta" || envelope.kind === "prompt")
       ) {
         noteReplyFrameArrived(frameAt);
       }
@@ -1943,9 +1927,6 @@ class WebServerApi implements IServerApi {
           });
           return;
         }
-        case "display":
-          this.eventBus.emit("game:remote_display", envelope);
-          return;
         case "prompt":
           this.eventBus.emit("game:remote_prompt", envelope);
           return;

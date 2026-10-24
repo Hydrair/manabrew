@@ -15,6 +15,12 @@ const APP_SOUNDS = {
     volume: 0.55,
     cooldownMs: 250,
   },
+  buttonClick: {
+    alias: "sound.app.button-click",
+    src: "/sounds/mulligan.wav",
+    volume: 0.5,
+    cooldownMs: 50,
+  },
   roomInvite: {
     alias: "sound.app.room-invite",
     src: "/sounds/gem-light.wav",

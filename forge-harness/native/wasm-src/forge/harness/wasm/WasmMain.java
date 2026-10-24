@@ -115,7 +115,6 @@ public final class WasmMain {
                         (seat, count) -> adapter.getLibraryTop(gameId, seat, count));
                 ManaBrewInteractiveSession.setBridge(transport);
                 final String result = adapter.startGameJson(start.toString());
-                adapter.flushDisplayEvents(gameId);
                 // startGameJson blocks for the whole game, so reaching this
                 // line means the game is over and every seat is still waiting
                 // on an answer that will never come.
