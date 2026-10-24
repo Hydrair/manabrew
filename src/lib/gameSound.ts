@@ -10,7 +10,7 @@ function gameSound(name: string, volume: number) {
 
 const GAME_SOUNDS: Record<GameSound, ReturnType<typeof gameSound>> = {
   cardPlay: gameSound("card-play", 0.7),
-  cardEnter: gameSound("card-etb", 0.65),
+  cardEnter: gameSound("card-etb", 0.7),
   cardTap: gameSound("wood-light", 0.0),
   cardUntap: gameSound("card-contact-firm", 0.0),
   cardAttach: gameSound("metal-light", 0.0),
@@ -22,8 +22,8 @@ const GAME_SOUNDS: Record<GameSound, ReturnType<typeof gameSound>> = {
   cardCounterAdd: gameSound("card-contact-soft", 0.0),
   cardCounterRemove: gameSound("card-contact-firm", 0.0),
   cardDamage: gameSound("wood-heavy", 0.0),
-  instantResolve: gameSound("spell-bright", 0.0),
-  sorceryResolve: gameSound("spell-fire", 0.0),
+  instantResolve: gameSound("spell-resolve", 0.7),
+  sorceryResolve: gameSound("spell-resolve", 0.7),
   lifeGain: gameSound("gem-bright", 0.0),
   lifeLoss: gameSound("stone-heavy", 0.0),
   combatBlock: gameSound("wood-medium", 0.0),
