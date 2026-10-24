@@ -9,7 +9,7 @@ function gameSound(name: string, volume: number) {
 }
 
 const GAME_SOUNDS: Record<GameSound, ReturnType<typeof gameSound>> = {
-  cardPlay: gameSound("card-play", 0.0),
+  cardPlay: gameSound("card-play", 0.7),
   cardEnter: gameSound("card-etb", 0.65),
   cardTap: gameSound("wood-light", 0.0),
   cardUntap: gameSound("card-contact-firm", 0.0),
